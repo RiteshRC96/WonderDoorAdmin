@@ -20,8 +20,10 @@ export default function InventoryPage() {
     <div className="container mx-auto py-6 animate-subtle-fade-in">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-foreground">Inventory</h1>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Item
+        <Button asChild>
+          <Link href="/inventory/new">
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Item
+          </Link>
         </Button>
       </div>
 
