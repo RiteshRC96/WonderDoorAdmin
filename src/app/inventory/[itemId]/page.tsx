@@ -10,15 +10,19 @@ import Link from 'next/link';
 async function getItemDetails(itemId: string) {
   // Simulate API call
   await new Promise(resolve => setTimeout(resolve, 50)); // Simulate network delay
-  // Add the new item from the form submission simulation to the list for testing
+
+  // --- IMPORTANT NOTE ---
+  // This items array is static placeholder data used to simulate fetching item details.
+  // In a real application, this data would come from a database.
+  // The item added via the form won't be found here unless its ID matches one below.
+  // --- END NOTE ---
   const items = [
-    { id: "1", name: "Modern Oak Door", style: "Modern", material: "Oak", dimensions: "36x80", stock: 15, price: 450, image: "https://picsum.photos/600/400", hint: "modern oak door", description: "A sleek and sturdy modern oak door, perfect for contemporary homes. Features clean lines and a natural finish.", sku: "MOD-OAK-3680", weight: "55 lbs", leadTime: "2 weeks", relatedOrders: [{id: 'ORD-001', date: '2024-07-20'}, {id: 'ORD-007', date: '2024-07-21'}], relatedShipments: [{id: 'SHP-103', status: 'Label Created'}]},
-    { id: "2", name: "Classic Walnut Panel", style: "Classic", material: "Walnut", dimensions: "32x80", stock: 8, price: 620, image: "https://picsum.photos/600/400", hint: "classic walnut door", description: "Elegant classic door with raised panels, crafted from rich walnut wood. Adds timeless sophistication.", sku: "CLS-WAL-3280", weight: "65 lbs", leadTime: "3 weeks", relatedOrders: [{id: 'ORD-002', date: '2024-07-19'}], relatedShipments: [{id: 'SHP-101', status: 'In Transit'}]},
-    { id: "3", name: "Minimalist Pine Door", style: "Minimalist", material: "Pine", dimensions: "30x78", stock: 22, price: 300, image: "https://picsum.photos/600/400", hint: "minimalist pine door", description: "Simple yet stylish pine door with a smooth surface, ideal for minimalist interiors. Ready for paint or stain.", sku: "MIN-PIN-3078", weight: "40 lbs", leadTime: "1 week", relatedOrders: [], relatedShipments: []},
-    { id: "4", name: "Mid-Century Sofa", style: "Mid-Century", material: "Fabric", dimensions: "84x35x32", stock: 5, price: 1200, image: "https://picsum.photos/600/400", hint: "mid century sofa", description: "Iconic mid-century modern sofa with tapered legs and comfortable upholstery. A statement piece.", sku: "SOF-MCM-FAB-84", weight: "150 lbs", leadTime: "4 weeks", relatedOrders: [{id: 'ORD-004', date: '2024-07-17'}], relatedShipments: [{id: 'SHP-102', status: 'Out for Delivery'}]},
-    { id: "5", name: "Industrial Coffee Table", style: "Industrial", material: "Metal, Wood", dimensions: "48x24x18", stock: 12, price: 350, image: "https://picsum.photos/600/400", hint: "industrial coffee table", description: "Robust industrial-style coffee table featuring a solid wood top and sturdy metal frame.", sku: "TBL-IND-MW-48", weight: "70 lbs", leadTime: "2 weeks", relatedOrders: [{id: 'ORD-003', date: '2024-07-18'}], relatedShipments: [{id: 'SHP-104', status: 'Delivered'}]},
-     // Add a placeholder for a potentially newly added item for navigation testing
-     { id: "ITEM-XYZ123", name: "Newly Added Item", style: "Test Style", material: "Test Material", dimensions: "1x1", stock: 10, price: 99.99, image: "https://picsum.photos/600/400", hint: "test item", description: "This is a test item added via the form.", sku: "TEST-SKU-001", weight: "10 lbs", leadTime: "1 week", relatedOrders: [], relatedShipments: [] },
+    { id: "1", name: "Modern Oak Door", style: "Modern", material: "Oak", dimensions: "36x80", stock: 15, price: 450, image: "https://picsum.photos/seed/1/600/400", hint: "modern oak door", description: "A sleek and sturdy modern oak door, perfect for contemporary homes. Features clean lines and a natural finish.", sku: "MOD-OAK-3680", weight: "55 lbs", leadTime: "2 weeks", relatedOrders: [{id: 'ORD-001', date: '2024-07-20'}, {id: 'ORD-007', date: '2024-07-21'}], relatedShipments: [{id: 'SHP-103', status: 'Label Created'}]},
+    { id: "2", name: "Classic Walnut Panel", style: "Classic", material: "Walnut", dimensions: "32x80", stock: 8, price: 620, image: "https://picsum.photos/seed/2/600/400", hint: "classic walnut door", description: "Elegant classic door with raised panels, crafted from rich walnut wood. Adds timeless sophistication.", sku: "CLS-WAL-3280", weight: "65 lbs", leadTime: "3 weeks", relatedOrders: [{id: 'ORD-002', date: '2024-07-19'}], relatedShipments: [{id: 'SHP-101', status: 'In Transit'}]},
+    { id: "3", name: "Minimalist Pine Door", style: "Minimalist", material: "Pine", dimensions: "30x78", stock: 22, price: 300, image: "https://picsum.photos/seed/3/600/400", hint: "minimalist pine door", description: "Simple yet stylish pine door with a smooth surface, ideal for minimalist interiors. Ready for paint or stain.", sku: "MIN-PIN-3078", weight: "40 lbs", leadTime: "1 week", relatedOrders: [], relatedShipments: []},
+    { id: "4", name: "Mid-Century Sofa", style: "Mid-Century", material: "Fabric", dimensions: "84x35x32", stock: 5, price: 1200, image: "https://picsum.photos/seed/4/600/400", hint: "mid century sofa", description: "Iconic mid-century modern sofa with tapered legs and comfortable upholstery. A statement piece.", sku: "SOF-MCM-FAB-84", weight: "150 lbs", leadTime: "4 weeks", relatedOrders: [{id: 'ORD-004', date: '2024-07-17'}], relatedShipments: [{id: 'SHP-102', status: 'Out for Delivery'}]},
+    { id: "5", name: "Industrial Coffee Table", style: "Industrial", material: "Metal, Wood", dimensions: "48x24x18", stock: 12, price: 350, image: "https://picsum.photos/seed/5/600/400", hint: "industrial coffee table", description: "Robust industrial-style coffee table featuring a solid wood top and sturdy metal frame.", sku: "TBL-IND-MW-48", weight: "70 lbs", leadTime: "2 weeks", relatedOrders: [{id: 'ORD-003', date: '2024-07-18'}], relatedShipments: [{id: 'SHP-104', status: 'Delivered'}]},
+    // Removed static placeholder: { id: "ITEM-XYZ123", name: "Newly Added Item", style: "Test Style", material: "Test Material", dimensions: "1x1", stock: 10, price: 99.99, image: "https://picsum.photos/600/400", hint: "test item", description: "This is a test item added via the form.", sku: "TEST-SKU-001", weight: "10 lbs", leadTime: "1 week", relatedOrders: [], relatedShipments: [] },
   ];
   return items.find(item => item.id === itemId || item.sku === itemId.toUpperCase()); // Allow lookup by SKU as well potentially
 }
@@ -77,7 +81,7 @@ export default async function InventoryItemPage({ params }: { params: { itemId: 
            <div className="md:col-span-1 p-4">
              <div className="relative aspect-square w-full rounded-lg overflow-hidden shadow-md">
                <Image
-                 src={item.image || `https://picsum.photos/seed/${item.id}/600/400`} // Fallback image
+                 src={item.image || `https://picsum.photos/seed/${item.id}/600/400`} // Fallback image using consistent seed
                  alt={item.name}
                  layout="fill"
                  objectFit="cover"

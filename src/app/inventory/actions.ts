@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { AddItemSchema, type AddItemInput } from '@/schemas/inventory'; // Import from the new schema file
+import { AddItemSchema, type AddItemInput } from '@/schemas/inventory';
 
 // Server Action to add a new inventory item
 export async function addItemAction(data: AddItemInput) {
@@ -26,43 +26,43 @@ export async function addItemAction(data: AddItemInput) {
 
 
   try {
-    // --- Placeholder for actual database interaction ---
-    console.log("Attempting to add item:", newItemData);
-    // In a real application, you would insert `newItemData` into your database here.
-    // Example (pseudo-code):
-    // const db = await connectToDatabase();
-    // const newItem = await db.collection('inventory').insertOne(newItemData);
-    // const newItemId = newItem.insertedId;
+    // --- >>> PLACEHOLDER: NO DATABASE INTERACTION <<< ---
+    // This action *simulates* adding an item to a database.
+    // Because there is no actual database connected to this application,
+    // the `newItemData` is NOT saved anywhere permanently.
+    // The `revalidatePath('/inventory')` call below WILL trigger a refresh
+    // of the inventory page, but that page uses a STATIC list of items.
+    // Therefore, the newly "added" item WILL NOT APPEAR on the inventory list.
+    // To make items persist, you would need to integrate a database
+    // (e.g., Firestore, PostgreSQL) and replace this simulation with
+    // actual database insertion logic.
+    // --- >>> END PLACEHOLDER <<< ---
 
-    // Important Note for Simulation: This action *simulates* adding an item.
-    // Because there's no database, the item won't actually appear on the
-    // inventory list page even after revalidation, as the list page uses static data.
-    // --- End Placeholder ---
+    console.log("Simulating database insert with item data:", newItemData);
 
-    // Simulate successful addition
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
-    const simulatedNewItemId = `ITEM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-    console.log(`Simulated adding item with ID: ${simulatedNewItemId}`);
+    // Simulate successful addition and network delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const simulatedNewItemId = `SIM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`; // Prefix indicates simulation
+    console.log(`Simulated adding item with simulated ID: ${simulatedNewItemId}`);
 
 
     // Revalidate the inventory list page cache. This causes the page component
-    // to re-run on the next visit, but it won't add the item to the static list.
+    // to re-run on the next visit, but it won't add the item because the list is static.
     revalidatePath('/inventory');
 
-    // Return success and potentially the new item's ID
+    // Return success and the simulated ID
      return {
       success: true,
-      message: "Item added successfully!",
-      itemId: simulatedNewItemId, // Return the simulated ID
+      message: "Item addition simulated successfully!", // Adjusted message
+      itemId: simulatedNewItemId,
     };
 
   } catch (error) {
-    console.error("Error adding item:", error);
+    console.error("Error during simulated item addition:", error);
     return {
       success: false,
-      message: "Failed to add item due to a server error. Please try again.",
+      message: "Failed to simulate item addition due to a server error. Please try again.",
       errors: null, // Indicate no specific field errors for a general server error
     };
   }
-  // Redirecting is handled client-side after receiving the success response
 }

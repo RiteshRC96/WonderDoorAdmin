@@ -1,20 +1,26 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card"; // Added CardDescription back
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Filter, Search, Box } from "lucide-react"; // Added Box icon for placeholder
+import { PlusCircle, Filter, Search, Box } from "lucide-react";
 import Image from 'next/image';
-import Link from 'next/link'; // Added Link for navigation
+import Link from 'next/link';
 
-// Placeholder data - replace with actual data fetching
+// --- IMPORTANT NOTE ---
+// This inventoryItems array is static placeholder data.
+// Items added through the "Add New Item" form are simulated in the server action
+// but WILL NOT appear in this list because there is no database connected
+// to persist the new items. The revalidatePath function in the action works,
+// but this page component will always render the same static list below.
+// A real application would fetch this data from a database.
+// --- END NOTE ---
 const inventoryItems = [
-  { id: "1", name: "Modern Oak Door", style: "Modern", material: "Oak", dimensions: "36x80", stock: 15, price: 450, image: "https://picsum.photos/300/200", hint: "wood door" },
-  { id: "2", name: "Classic Walnut Panel", style: "Classic", material: "Walnut", dimensions: "32x80", stock: 8, price: 620, image: "https://picsum.photos/300/200", hint: "panel door" },
-  { id: "3", name: "Minimalist Pine Door", style: "Minimalist", material: "Pine", dimensions: "30x78", stock: 22, price: 300, image: "https://picsum.photos/300/200", hint: "simple door" },
-  { id: "4", name: "Mid-Century Sofa", style: "Mid-Century", material: "Fabric", dimensions: "84x35x32", stock: 5, price: 1200, image: "https://picsum.photos/300/200", hint: "retro sofa" },
-  { id: "5", name: "Industrial Coffee Table", style: "Industrial", material: "Metal, Wood", dimensions: "48x24x18", stock: 12, price: 350, image: "https://picsum.photos/300/200", hint: "metal table" },
-   // Add the newly added item simulation for testing - adjust details as needed
-   { id: "ITEM-XYZ123", name: "Newly Added Item", style: "Test Style", material: "Test Material", dimensions: "1x1", stock: 10, price: 99.99, image: "https://picsum.photos/300/200", hint: "test item" },
+  { id: "1", name: "Modern Oak Door", style: "Modern", material: "Oak", dimensions: "36x80", stock: 15, price: 450, image: "https://picsum.photos/seed/1/300/200", hint: "wood door" },
+  { id: "2", name: "Classic Walnut Panel", style: "Classic", material: "Walnut", dimensions: "32x80", stock: 8, price: 620, image: "https://picsum.photos/seed/2/300/200", hint: "panel door" },
+  { id: "3", name: "Minimalist Pine Door", style: "Minimalist", material: "Pine", dimensions: "30x78", stock: 22, price: 300, image: "https://picsum.photos/seed/3/300/200", hint: "simple door" },
+  { id: "4", name: "Mid-Century Sofa", style: "Mid-Century", material: "Fabric", dimensions: "84x35x32", stock: 5, price: 1200, image: "https://picsum.photos/seed/4/300/200", hint: "retro sofa" },
+  { id: "5", name: "Industrial Coffee Table", style: "Industrial", material: "Metal, Wood", dimensions: "48x24x18", stock: 12, price: 350, image: "https://picsum.photos/seed/5/300/200", hint: "metal table" },
+  // Removed static placeholder: { id: "ITEM-XYZ123", name: "Newly Added Item", style: "Test Style", material: "Test Material", dimensions: "1x1", stock: 10, price: 99.99, image: "https://picsum.photos/300/200", hint: "test item" },
 ];
 
 export default function InventoryPage() {
@@ -47,7 +53,7 @@ export default function InventoryPage() {
             <SelectItem value="minimalist">Minimalist</SelectItem>
             <SelectItem value="mid-century">Mid-Century</SelectItem>
             <SelectItem value="industrial">Industrial</SelectItem>
-            <SelectItem value="test style">Test Style</SelectItem> {/* Added Test Style */}
+             {/* Removed Test Style: <SelectItem value="test style">Test Style</SelectItem> */}
           </SelectContent>
         </Select>
         <Select>
@@ -63,7 +69,7 @@ export default function InventoryPage() {
             <SelectItem value="fabric">Fabric</SelectItem>
             <SelectItem value="metal">Metal</SelectItem>
             <SelectItem value="wood">Wood</SelectItem>
-             <SelectItem value="test material">Test Material</SelectItem> {/* Added Test Material */}
+             {/* Removed Test Material: <SelectItem value="test material">Test Material</SelectItem> */}
           </SelectContent>
         </Select>
       </div>
@@ -87,7 +93,6 @@ export default function InventoryPage() {
               </CardHeader>
               <CardContent className="p-4">
                 <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
-                {/* Fixed: Added CardDescription import */}
                 <CardDescription className="text-sm text-muted-foreground mb-2">
                   {item.style} / {item.material}
                 </CardDescription>
