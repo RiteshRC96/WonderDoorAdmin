@@ -4,7 +4,6 @@ import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import type { FieldElement } from "react-hook-form"; // Import FieldElement type
-import { z } from "zod";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { addItemAction, AddItemSchema, AddItemInput } from "@/app/inventory/actions";
+import { addItemAction } from "@/app/inventory/actions"; // Keep action import
+import { AddItemSchema, type AddItemInput } from "@/schemas/inventory"; // Import schema/type from new location
 import { Loader2 } from "lucide-react";
 
 export function AddItemForm() {
@@ -84,14 +84,6 @@ export function AddItemForm() {
           });
             // Focus the first field with an error
             if (firstErrorField) {
-                // Need to access the actual DOM element via ref if possible,
-                // otherwise rely on field name for focus (might not work perfectly depending on setup)
-                // For ShadCN/react-hook-form, direct focus might require refs on inputs or a helper.
-                 // Attempting direct focus (may need adjustment based on actual component refs)
-                 const fieldElement = form.control.getFieldState(firstErrorField).isDirty // Check if field state exists
-                 ? document.querySelector<FieldElement>(`[name="${firstErrorField}"]`)
-                 : null;
-
                  // Wait for the next tick to ensure the DOM has updated with errors
                  setTimeout(() => {
                       const firstErrorElement = document.querySelector<HTMLElement>(`[aria-invalid="true"]`);
