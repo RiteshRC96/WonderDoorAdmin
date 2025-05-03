@@ -95,7 +95,8 @@ export default function RootLayout({
             </SidebarFooter>
           </Sidebar>
           <SidebarInset>
-            <main className="flex-1 p-4 md:p-6">
+            {/* Increased padding for better spacing within the main content area */}
+            <main className="flex-1 p-6 md:p-8 lg:p-10">
               {children}
             </main>
             <Toaster /> {/* Add Toaster for notifications */}

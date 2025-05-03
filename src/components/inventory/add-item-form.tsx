@@ -18,11 +18,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"; // Added CardFooter
 import { useToast } from "@/hooks/use-toast";
 import { addItemAction } from "@/app/inventory/actions"; // Keep action import
 import { AddItemSchema, type AddItemInput } from "@/schemas/inventory"; // Import schema/type from new location
 import { Loader2 } from "lucide-react";
+import { Separator } from "@/components/ui/separator"; // Import Separator
 
 export function AddItemForm() {
   const router = useRouter();
@@ -33,15 +34,15 @@ export function AddItemForm() {
     resolver: zodResolver(AddItemSchema),
     defaultValues: {
       name: "",
+      sku: "",
       style: "",
       material: "",
       dimensions: "",
-      stock: 0,
-      price: 0, // Ensure default price is a number
-      description: "",
-      sku: "",
       weight: "",
+      stock: 0,
+      price: 0,
       leadTime: "",
+      description: "",
       imageUrl: "",
       imageHint: "",
     },
@@ -118,195 +119,219 @@ export function AddItemForm() {
   }
 
   return (
-    <Card className="max-w-3xl mx-auto">
+    <Card className="max-w-4xl mx-auto shadow-md"> {/* Wider card, added shadow */}
       <CardHeader>
-        <CardTitle>Add New Inventory Item</CardTitle>
-        <CardDescription>Fill in the details for the new item.</CardDescription>
+        {/* CardTitle removed as title is on page level */}
+        <CardDescription>Fill in the details below to add a new item to your inventory catalog.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Item Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Modern Oak Door" {...field} aria-invalid={!!form.formState.errors.name} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="sku"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SKU</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., MOD-OAK-3680" {...field} aria-invalid={!!form.formState.errors.sku} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="style"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Style</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Modern, Classic" {...field} aria-invalid={!!form.formState.errors.style} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="material"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Material</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Oak, Walnut, Fabric" {...field} aria-invalid={!!form.formState.errors.material} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="dimensions"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Dimensions</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., 36x80 or 84x35x32" {...field} aria-invalid={!!form.formState.errors.dimensions} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="weight"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Weight (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., 55 lbs" {...field} aria-invalid={!!form.formState.errors.weight} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="stock"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Stock Quantity</FormLabel>
-                    <FormControl>
-                      {/* Ensure value is treated as number, default to 0 if NaN */}
-                      <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} aria-invalid={!!form.formState.errors.stock}/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Price ($)</FormLabel>
-                    <FormControl>
-                       {/* Ensure value is treated as number, default to 0 if NaN */}
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} aria-invalid={!!form.formState.errors.price}/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-                <FormField
-                 control={form.control}
-                 name="leadTime"
-                 render={({ field }) => (
-                   <FormItem>
-                     <FormLabel>Lead Time (Optional)</FormLabel>
-                     <FormControl>
-                       <Input placeholder="e.g., 2 weeks" {...field} aria-invalid={!!form.formState.errors.leadTime} />
-                     </FormControl>
-                     <FormMessage />
-                   </FormItem>
-                 )}
-               />
-                <FormField
-                 control={form.control}
-                 name="imageUrl"
-                 render={({ field }) => (
-                   <FormItem>
-                     <FormLabel>Image URL (Optional)</FormLabel>
-                     <FormControl>
-                       <Input type="url" placeholder="https://..." {...field} aria-invalid={!!form.formState.errors.imageUrl} />
-                     </FormControl>
-                     <FormDescription>Enter the full URL of the product image.</FormDescription>
-                     <FormMessage />
-                   </FormItem>
-                 )}
-               />
-                 <FormField
-                 control={form.control}
-                 name="imageHint"
-                 render={({ field }) => (
-                   <FormItem className="md:col-span-2">
-                     <FormLabel>Image Hint (Optional)</FormLabel>
-                     <FormControl>
-                       <Input placeholder="e.g., wood door" {...field} aria-invalid={!!form.formState.errors.imageHint} />
-                     </FormControl>
-                      <FormDescription>Keywords for AI image search (if URL not provided).</FormDescription>
-                     <FormMessage />
-                   </FormItem>
-                 )}
-               />
+       <Form {...form}>
+         <form onSubmit={form.handleSubmit(onSubmit)}>
+           <CardContent className="space-y-8"> {/* Increased spacing */}
 
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Description (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Provide a brief description of the item..."
-                        className="resize-y min-h-[100px]"
-                        {...field}
-                        aria-invalid={!!form.formState.errors.description}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+             {/* Basic Information Section */}
+             <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Basic Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Item Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Modern Oak Door" {...field} aria-invalid={!!form.formState.errors.name} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={form.control}
+                    name="sku"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>SKU *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., MOD-OAK-3680" {...field} aria-invalid={!!form.formState.errors.sku} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="style"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Style *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Modern, Classic" {...field} aria-invalid={!!form.formState.errors.style} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="material"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Material *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., Oak, Walnut, Fabric" {...field} aria-invalid={!!form.formState.errors.material} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Description (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Provide a brief description of the item, its features, and selling points..."
+                            className="resize-y min-h-[100px]"
+                            {...field}
+                            aria-invalid={!!form.formState.errors.description}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
             </div>
 
-            <div className="flex justify-end space-x-2 pt-4">
+            {/* Specifications Section */}
+             <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Specifications</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="dimensions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Dimensions *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., 36 W x 80 H or 84 L x 35 W x 32 H" {...field} aria-invalid={!!form.formState.errors.dimensions} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                   <FormField
+                    control={form.control}
+                    name="weight"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Weight (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., 55 lbs or 25 kg" {...field} aria-invalid={!!form.formState.errors.weight} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+             </div>
+
+            {/* Inventory & Pricing Section */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Inventory & Pricing</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6"> {/* Changed to 3 columns */}
+                   <FormField
+                    control={form.control}
+                    name="stock"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Stock Quantity *</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} aria-invalid={!!form.formState.errors.stock}/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="price"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price ($) *</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} aria-invalid={!!form.formState.errors.price}/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                    <FormField
+                     control={form.control}
+                     name="leadTime"
+                     render={({ field }) => (
+                       <FormItem>
+                         <FormLabel>Lead Time (Optional)</FormLabel>
+                         <FormControl>
+                           <Input placeholder="e.g., 2 weeks, 5-7 days" {...field} aria-invalid={!!form.formState.errors.leadTime} />
+                         </FormControl>
+                         <FormMessage />
+                       </FormItem>
+                     )}
+                   />
+                </div>
+            </div>
+
+            {/* Media Section */}
+             <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Media</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                     control={form.control}
+                     name="imageUrl"
+                     render={({ field }) => (
+                       <FormItem>
+                         <FormLabel>Image URL (Optional)</FormLabel>
+                         <FormControl>
+                           <Input type="url" placeholder="https://..." {...field} aria-invalid={!!form.formState.errors.imageUrl} />
+                         </FormControl>
+                         <FormDescription>Enter the full URL of the main product image.</FormDescription>
+                         <FormMessage />
+                       </FormItem>
+                     )}
+                   />
+                     <FormField
+                     control={form.control}
+                     name="imageHint"
+                     render={({ field }) => (
+                       <FormItem>
+                         <FormLabel>Image Hint (Optional)</FormLabel>
+                         <FormControl>
+                           <Input placeholder="e.g., modern oak door, minimalist sofa" {...field} aria-invalid={!!form.formState.errors.imageHint} />
+                         </FormControl>
+                          <FormDescription>Keywords for AI search (if URL is blank).</FormDescription>
+                         <FormMessage />
+                       </FormItem>
+                     )}
+                   />
+                </div>
+            </div>
+
+           </CardContent>
+           <Separator />
+           <CardFooter className="flex justify-end space-x-3 p-6"> {/* Added padding */}
               <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isSubmitting ? "Adding..." : "Add Item"}
+                {isSubmitting ? "Saving Item..." : "Save Item"}
               </Button>
-            </div>
-          </form>
+            </CardFooter>
+         </form>
         </Form>
-      </CardContent>
     </Card>
   );
 }
