@@ -9,38 +9,48 @@ let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 // let analytics; // Uncomment if you need analytics
 
-// Initialize Firebase only if config is valid
-if (isFirebaseConfigValid) {
-    if (!getApps().length) {
-        try {
-            app = initializeApp(firebaseConfig);
-             console.log("Firebase initialized successfully.");
-        } catch (error) {
-            console.error("Firebase initialization error:", error);
-            // Handle initialization error appropriately
-        }
-    } else {
-        app = getApp();
-         console.log("Firebase app already initialized.");
-    }
+function initializeFirebaseApp() {
+  if (!isFirebaseConfigValid) {
+    console.error('Firebase config is invalid. Firebase initialization skipped.');
+    return null;
+  }
 
-    // Initialize Firestore only if app was initialized successfully
-    if (app) {
-        try {
-            db = getFirestore(app);
-            console.log("Firestore initialized successfully.");
-            // Initialize Analytics if measurementId is present and needed
-            // if (firebaseConfig.measurementId) {
-            //   analytics = getAnalytics(app);
-            //   console.log("Firebase Analytics initialized.");
-            // }
-        } catch (error) {
-            console.error("Firestore initialization error:", error);
-            db = null; // Ensure db is null if initialization fails
-        }
+  if (getApps().length === 0) {
+    try {
+      console.log("Attempting to initialize Firebase app...");
+      const initializedApp = initializeApp(firebaseConfig);
+      console.log("Firebase app initialized successfully.");
+      return initializedApp;
+    } catch (error) {
+      console.error("Firebase initialization error:", error);
+      return null; // Return null on initialization error
     }
+  } else {
+    console.log("Firebase app already exists. Getting existing app.");
+    return getApp(); // Return existing app
+  }
+}
+
+// Initialize Firebase App
+app = initializeFirebaseApp();
+
+// Initialize Firestore only if app was initialized successfully
+if (app) {
+  try {
+    console.log("Attempting to initialize Firestore...");
+    db = getFirestore(app);
+    console.log("Firestore initialized successfully.");
+    // Initialize Analytics if measurementId is present and needed
+    // if (firebaseConfig.measurementId) {
+    //   analytics = getAnalytics(app);
+    //   console.log("Firebase Analytics initialized.");
+    // }
+  } catch (error) {
+    console.error("Firestore initialization error:", error);
+    db = null; // Ensure db is null if Firestore initialization fails
+  }
 } else {
-    console.warn('Firebase config is invalid. Firebase and Firestore initialization skipped.');
+    console.warn('Firebase app initialization failed or skipped. Firestore initialization skipped.');
 }
 
 

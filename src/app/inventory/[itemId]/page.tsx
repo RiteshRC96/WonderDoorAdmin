@@ -4,11 +4,12 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
-import { ArrowLeft, Edit, Package, Truck } from 'lucide-react';
+import { ArrowLeft, Edit, Package, Truck, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { db, doc, getDoc } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
 import type { AddItemInput } from '@/schemas/inventory'; // Import the type for structure
 import { notFound } from 'next/navigation'; // Import notFound for handling missing items
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 
 // Define the structure of an inventory item including its ID
 interface InventoryItem extends AddItemInput {
@@ -20,21 +21,22 @@ interface InventoryItem extends AddItemInput {
 
 
 // Function to fetch a single item's details from Firestore
-async function getItemDetails(itemId: string): Promise<InventoryItem | null> {
+async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | null; error?: string }> {
   if (!db) {
-    console.error("Firestore database is not initialized. Cannot fetch item details.");
-    return null;
+    const errorMessage = "Firestore database is not initialized. Cannot fetch item details. Please check Firebase configuration in .env.local and restart the server.";
+    console.error(errorMessage);
+    return { item: null, error: errorMessage };
   }
 
   try {
+    console.log(`Attempting to fetch item details for ID: ${itemId}`);
     const itemDocRef = doc(db, 'inventory', itemId);
     const docSnap = await getDoc(itemDocRef);
 
     if (docSnap.exists()) {
-       // Combine document ID with document data
-       // Add dummy related data for now - replace with real logic later
+       console.log("Item found in Firestore.");
        const data = docSnap.data() as AddItemInput;
-       return {
+       const itemData = {
            id: docSnap.id,
            ...data,
            // --- Placeholder Related Data ---
@@ -42,13 +44,15 @@ async function getItemDetails(itemId: string): Promise<InventoryItem | null> {
            relatedShipments: data.sku === 'MOD-OAK-3680' ? [{id: 'SHP-103', status: 'Label Created'}] : [],
            // --- End Placeholder ---
        };
+        return { item: itemData };
     } else {
-      console.log("No such document!");
-      return null; // Item not found
+      console.log("No such document found for item ID:", itemId);
+      return { item: null }; // Item not found is not an error state here, handled by notFound() later
     }
   } catch (error) {
-    console.error("Error fetching item details from Firestore:", error);
-    return null; // Return null on error
+    const errorMessage = `Error fetching item details from Firestore for ID ${itemId}: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMessage);
+    return { item: null, error: "Failed to load item details due to a database error." }; // Return generic error for UI
   }
 }
 
@@ -77,12 +81,27 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 
 export default async function InventoryItemPage({ params }: { params: { itemId: string } }) {
-  const item = await getItemDetails(params.itemId);
+  const { item, error: fetchError } = await getItemDetails(params.itemId);
 
+  // Handle fetch error first
+  if (fetchError) {
+     return (
+       <div className="container mx-auto py-6">
+         <Alert variant="destructive">
+           <AlertTriangle className="h-4 w-4" />
+           <AlertTitle>Error Loading Item Details</AlertTitle>
+           <AlertDescription>{fetchError}</AlertDescription>
+         </Alert>
+       </div>
+     );
+  }
+
+  // If no error but item is null, then it's not found
   if (!item) {
     notFound(); // Use Next.js notFound utility for 404 page
   }
 
+  // If item exists and no error, render the page
   return (
     <div className="container mx-auto py-6 animate-subtle-fade-in">
        <div className="mb-6 flex items-center justify-between">
@@ -191,7 +210,7 @@ export default async function InventoryItemPage({ params }: { params: { itemId: 
 
 // Generate dynamic metadata
 export async function generateMetadata({ params }: { params: { itemId: string } }) {
-  const item = await getItemDetails(params.itemId);
+  const { item } = await getItemDetails(params.itemId); // Fetch item data for metadata
   return {
     title: item ? `${item.name} | Showroom Manager` : 'Item Not Found | Showroom Manager',
   };

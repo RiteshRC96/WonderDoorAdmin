@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Filter, Search, Box, Info } from "lucide-react";
+import { PlusCircle, Filter, Search, Box, Info, AlertTriangle } from "lucide-react";
 import Image from 'next/image';
 import Link from 'next/link';
 import { db, collection, getDocs } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
 import type { AddItemInput } from '@/schemas/inventory'; // Import the type for structure
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 
 // Define the structure of an inventory item including its ID
 interface InventoryItem extends AddItemInput {
@@ -15,13 +16,15 @@ interface InventoryItem extends AddItemInput {
 }
 
 // Function to fetch inventory items from Firestore
-async function getInventoryItems(): Promise<InventoryItem[]> {
+async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: string }> {
   if (!db) {
-    console.error("Firestore database is not initialized. Cannot fetch inventory.");
-    return []; // Return empty array if DB is not available
+    const errorMessage = "Firestore database is not initialized. Cannot fetch inventory. Please check Firebase configuration in .env.local and restart the server.";
+    console.error(errorMessage);
+    return { items: [], error: errorMessage }; // Return error message
   }
 
   try {
+    console.log("Attempting to fetch inventory items from Firestore...");
     const inventoryCollectionRef = collection(db, 'inventory');
     const querySnapshot = await getDocs(inventoryCollectionRef);
     const items: InventoryItem[] = [];
@@ -29,17 +32,19 @@ async function getInventoryItems(): Promise<InventoryItem[]> {
       // Combine document ID with document data
       items.push({ id: doc.id, ...(doc.data() as AddItemInput) });
     });
-    return items;
+    console.log(`Fetched ${items.length} inventory items.`);
+    return { items };
   } catch (error) {
-    console.error("Error fetching inventory items from Firestore:", error);
-    return []; // Return empty array on error
+    const errorMessage = `Error fetching inventory items from Firestore: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMessage);
+    return { items: [], error: "Failed to load inventory data due to a database error." }; // Return generic error for UI
   }
 }
 
 
 export default async function InventoryPage() {
   // Fetch items directly in the Server Component
-  const inventoryItems = await getInventoryItems();
+  const { items: inventoryItems, error: fetchError } = await getInventoryItems();
 
   return (
     <div className="container mx-auto py-6 animate-subtle-fade-in">
@@ -51,6 +56,17 @@ export default async function InventoryPage() {
           </Link>
         </Button>
       </div>
+
+      {/* Display Error if fetching failed */}
+      {fetchError && (
+         <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Error Loading Inventory</AlertTitle>
+            <AlertDescription>
+              {fetchError}
+            </AlertDescription>
+          </Alert>
+      )}
 
       {/* Filters and Search */}
       <div className="mb-6 flex flex-col md:flex-row gap-4">
@@ -92,37 +108,41 @@ export default async function InventoryPage() {
       </div>
 
       {/* Inventory Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {inventoryItems.map((item) => (
-          <Card key={item.id} className="overflow-hidden transition-shadow duration-200 hover:shadow-lg group">
-            <Link href={`/inventory/${item.id}`} className="block">
-              <CardHeader className="p-0">
-                <div className="relative h-48 w-full">
-                  <Image
-                    src={item.imageUrl || `https://picsum.photos/seed/${item.id}/300/200`} // Fallback image
-                    alt={item.name}
-                    layout="fill"
-                    objectFit="cover"
-                    data-ai-hint={item.imageHint || 'product item'}
-                    className="transition-transform duration-300 group-hover:scale-105"
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="p-4">
-                <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
-                <CardDescription className="text-sm text-muted-foreground mb-2">
-                  {item.style} / {item.material}
-                </CardDescription>
-                <p className="text-sm">Dimensions: {item.dimensions}</p>
-                <p className="text-sm">Stock: <span className={item.stock < 10 ? 'text-destructive font-medium' : ''}>{item.stock}</span></p>
-                <p className="text-lg font-semibold mt-2">${item.price?.toFixed(2) || 'N/A'}</p>
-              </CardContent>
-            </Link>
-          </Card>
-        ))}
-      </div>
-       {/* Placeholder for when no items are found */}
-       {inventoryItems.length === 0 && (
+      {!fetchError && ( // Only show grid if no error occurred
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {inventoryItems.map((item) => (
+            <Card key={item.id} className="overflow-hidden transition-shadow duration-200 hover:shadow-lg group">
+              <Link href={`/inventory/${item.id}`} className="block">
+                <CardHeader className="p-0">
+                  <div className="relative h-48 w-full">
+                    <Image
+                      src={item.imageUrl || `https://picsum.photos/seed/${item.id}/300/200`} // Fallback image
+                      alt={item.name}
+                      layout="fill"
+                      objectFit="cover"
+                      data-ai-hint={item.imageHint || 'product item'}
+                      className="transition-transform duration-300 group-hover:scale-105"
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
+                   {/* Correctly using CardDescription */}
+                   <CardDescription className="text-sm text-muted-foreground mb-2">
+                    {item.style} / {item.material}
+                  </CardDescription>
+                  <p className="text-sm">Dimensions: {item.dimensions}</p>
+                  <p className="text-sm">Stock: <span className={item.stock < 10 ? 'text-destructive font-medium' : ''}>{item.stock}</span></p>
+                  <p className="text-lg font-semibold mt-2">${item.price?.toFixed(2) || 'N/A'}</p>
+                </CardContent>
+              </Link>
+            </Card>
+          ))}
+        </div>
+      )}
+
+       {/* Placeholder for when no items are found (and no error) */}
+       {!fetchError && inventoryItems.length === 0 && (
          <div className="text-center py-12 text-muted-foreground col-span-full">
            <Box className="mx-auto h-12 w-12 mb-4" />
            <p>No inventory items found.</p>
@@ -139,4 +159,7 @@ export const metadata = {
 };
 
 // Ensure dynamic rendering because data is fetched on each request
+// This is important to reflect Firestore changes immediately
 export const dynamic = 'force-dynamic';
+// Optional: Could consider 'force-static' with revalidation if data changes less frequently
+// export const revalidate = 60; // Revalidate every 60 seconds

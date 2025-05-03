@@ -7,12 +7,13 @@ import { db, collection, addDoc } from '@/lib/firebase/firebase'; // Import Fire
 
 // Server Action to add a new inventory item to Firestore
 export async function addItemAction(data: AddItemInput): Promise<{ success: boolean; message: string; itemId?: string; errors?: Record<string, string[]> | null }> {
-  // Ensure Firestore is initialized
+  // Ensure Firestore is initialized before proceeding
   if (!db) {
-    console.error("Firestore database is not initialized. Check Firebase configuration.");
+    const errorMessage = "Firestore database is not initialized. Check Firebase configuration in .env.local and restart the server. Cannot add item.";
+    console.error(errorMessage);
     return {
       success: false,
-      message: "Database configuration error. Cannot add item.",
+      message: "Database configuration error. Unable to add item.", // Keep UI message simpler
       errors: null,
     };
   }
@@ -44,6 +45,7 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
 
 
   try {
+    console.log("Attempting to add item to Firestore...");
     // Add the new item document to the 'inventory' collection
     const inventoryCollectionRef = collection(db, 'inventory');
     const docRef = await addDoc(inventoryCollectionRef, newItemData);
@@ -51,7 +53,10 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
     console.log(`Successfully added item with ID: ${docRef.id}`);
 
     // Revalidate the inventory list page cache to show the new item
-    revalidatePath('/inventory');
+    // Use a tag-based or path-based revalidation strategy
+    revalidatePath('/inventory'); // Revalidate the main inventory listing page
+    revalidatePath(`/inventory/${docRef.id}`); // Revalidate the specific item page (though less critical here)
+
 
     // Return success and the actual document ID
     return {
@@ -61,12 +66,13 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
     };
 
   } catch (error) {
-    console.error("Error adding item to Firestore:", error);
+     const errorMessage = `Error adding item to Firestore: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMessage);
     // Check if the error is a Firestore specific error if needed
     // Example: if (error instanceof FirestoreError) { ... }
     return {
       success: false,
-      message: "Failed to add item due to a database error. Please try again.",
+      message: "Failed to add item due to a database error. Please try again.", // Keep UI message simple
       errors: null, // Indicate no specific field errors for a general server error
     };
   }
