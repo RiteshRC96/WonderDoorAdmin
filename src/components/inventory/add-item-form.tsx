@@ -50,17 +50,16 @@ export function AddItemForm() {
   async function onSubmit(values: AddItemInput) {
     setIsSubmitting(true);
     try {
-      // The action now expects imageUrl to be string | undefined
       const result = await addItemAction(values);
 
       if (result.success) {
         toast({
-          title: "Simulation Success!",
-          description: result.message,
+          title: "Success!",
+          description: result.message, // Display success message from action
         });
-        // Redirect to the main inventory page with a query param to show the explanation alert
-        // Note: The new item won't appear because the inventory list is static.
-        router.push('/inventory?simulated_add=true');
+        // Redirect directly to the main inventory page
+        router.push('/inventory');
+        // router.refresh(); // Optionally trigger a hard refresh if needed after redirect
         // Do not reset the form here, let the redirect happen.
 
       } else {
@@ -68,11 +67,10 @@ export function AddItemForm() {
         if (result.errors) {
           let firstErrorField: keyof AddItemInput | null = null;
           Object.entries(result.errors).forEach(([field, messages]) => {
-             // Ensure the field exists in the form before setting an error
              if (field in form.getValues() && messages && messages.length > 0) {
                 form.setError(field as keyof AddItemInput, {
                   type: 'manual',
-                  message: messages[0], // Show the first error message
+                  message: messages[0],
                 });
                 if (!firstErrorField) {
                    firstErrorField = field as keyof AddItemInput;
@@ -81,9 +79,7 @@ export function AddItemForm() {
                  console.warn(`Received error for non-existent field: ${field}`);
              }
           });
-            // Focus the first field with an error
             if (firstErrorField) {
-                 // Wait for the next tick to ensure the DOM has updated with errors
                  setTimeout(() => {
                       const firstErrorElement = document.querySelector<HTMLElement>(`[aria-invalid="true"]`);
                       if (firstErrorElement) {
@@ -98,13 +94,15 @@ export function AddItemForm() {
            });
 
         } else {
-           // General failure message
+           // General failure message from action (e.g., database error)
            toast({
              variant: "destructive",
              title: "Error",
              description: result.message || "Failed to add item. Please try again.",
            });
         }
+        // Keep submitting false if there was an error
+         setIsSubmitting(false);
       }
     } catch (error) {
        console.error("Submission error:", error);
@@ -113,13 +111,10 @@ export function AddItemForm() {
          title: "Submission Error",
          description: "An unexpected error occurred. Please try again.",
        });
-    } finally {
-       // Only set submitting false if there was an error, success navigates away
-       // This prevents a state update on an unmounted component if navigation is fast.
-       if (!form.formState.isSubmitSuccessful) {
-         setIsSubmitting(false);
-       }
+       setIsSubmitting(false); // Ensure submitting is set to false on catch
     }
+    // Removed finally block as setIsSubmitting(false) is handled in error cases now.
+    // Navigation happens on success, so no need to set it there.
   }
 
   return (
@@ -217,6 +212,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Stock Quantity</FormLabel>
                     <FormControl>
+                      {/* Ensure value is treated as number, default to 0 if NaN */}
                       <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} aria-invalid={!!form.formState.errors.stock}/>
                     </FormControl>
                     <FormMessage />
@@ -230,6 +226,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Price ($)</FormLabel>
                     <FormControl>
+                       {/* Ensure value is treated as number, default to 0 if NaN */}
                       <Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} aria-invalid={!!form.formState.errors.price}/>
                     </FormControl>
                     <FormMessage />
