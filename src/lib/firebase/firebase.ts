@@ -1,25 +1,50 @@
 // src/lib/firebase/firebase.ts
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, getDoc, addDoc } from 'firebase/firestore';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, doc, getDoc, addDoc, type Firestore } from 'firebase/firestore';
+// Import getAnalytics if needed, based on config
+// import { getAnalytics } from "firebase/analytics";
 import { firebaseConfig, isFirebaseConfigValid } from './config';
 
-// Initialize Firebase
-let app;
-if (!getApps().length) {
-  if (!isFirebaseConfigValid) {
-    console.error('Firebase config is invalid. Initialization skipped.');
-    // You might want to throw an error or handle this case differently
-    // depending on whether Firebase is critical for your app's core functionality.
-    app = null; // Or some placeholder if needed
-  } else {
-    app = initializeApp(firebaseConfig);
-  }
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
+// let analytics; // Uncomment if you need analytics
+
+// Initialize Firebase only if config is valid
+if (isFirebaseConfigValid) {
+    if (!getApps().length) {
+        try {
+            app = initializeApp(firebaseConfig);
+             console.log("Firebase initialized successfully.");
+        } catch (error) {
+            console.error("Firebase initialization error:", error);
+            // Handle initialization error appropriately
+        }
+    } else {
+        app = getApp();
+         console.log("Firebase app already initialized.");
+    }
+
+    // Initialize Firestore only if app was initialized successfully
+    if (app) {
+        try {
+            db = getFirestore(app);
+            console.log("Firestore initialized successfully.");
+            // Initialize Analytics if measurementId is present and needed
+            // if (firebaseConfig.measurementId) {
+            //   analytics = getAnalytics(app);
+            //   console.log("Firebase Analytics initialized.");
+            // }
+        } catch (error) {
+            console.error("Firestore initialization error:", error);
+            db = null; // Ensure db is null if initialization fails
+        }
+    }
 } else {
-  app = getApp();
+    console.warn('Firebase config is invalid. Firebase and Firestore initialization skipped.');
 }
 
-// Get Firestore instance only if app was initialized successfully
-const db = app ? getFirestore(app) : null;
 
 // Export app and db. Check if db is null before using it elsewhere.
-export { app, db, collection, getDocs, doc, getDoc, addDoc };
+export { app, db };
+// Export commonly used Firestore functions for convenience
+export { collection, getDocs, doc, getDoc, addDoc };
