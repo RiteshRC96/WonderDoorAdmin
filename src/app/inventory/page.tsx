@@ -1,17 +1,18 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from "@/components/ui/card"; // Added CardDescription
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Filter, Search } from "lucide-react";
+import { PlusCircle, Filter, Search, Box } from "lucide-react"; // Added Box icon for placeholder
 import Image from 'next/image';
+import Link from 'next/link'; // Added Link for navigation
 
 // Placeholder data - replace with actual data fetching
 const inventoryItems = [
-  { id: 1, name: "Modern Oak Door", style: "Modern", material: "Oak", dimensions: "36x80", stock: 15, price: 450, image: "https://picsum.photos/300/200", hint: "wood door" },
-  { id: 2, name: "Classic Walnut Panel", style: "Classic", material: "Walnut", dimensions: "32x80", stock: 8, price: 620, image: "https://picsum.photos/300/200", hint: "panel door" },
-  { id: 3, name: "Minimalist Pine Door", style: "Minimalist", material: "Pine", dimensions: "30x78", stock: 22, price: 300, image: "https://picsum.photos/300/200", hint: "simple door" },
-  { id: 4, name: "Mid-Century Sofa", style: "Mid-Century", material: "Fabric", dimensions: "84x35x32", stock: 5, price: 1200, image: "https://picsum.photos/300/200", hint: "retro sofa" },
-  { id: 5, name: "Industrial Coffee Table", style: "Industrial", material: "Metal, Wood", dimensions: "48x24x18", stock: 12, price: 350, image: "https://picsum.photos/300/200", hint: "metal table" },
+  { id: "1", name: "Modern Oak Door", style: "Modern", material: "Oak", dimensions: "36x80", stock: 15, price: 450, image: "https://picsum.photos/300/200", hint: "wood door" },
+  { id: "2", name: "Classic Walnut Panel", style: "Classic", material: "Walnut", dimensions: "32x80", stock: 8, price: 620, image: "https://picsum.photos/300/200", hint: "panel door" },
+  { id: "3", name: "Minimalist Pine Door", style: "Minimalist", material: "Pine", dimensions: "30x78", stock: 22, price: 300, image: "https://picsum.photos/300/200", hint: "simple door" },
+  { id: "4", name: "Mid-Century Sofa", style: "Mid-Century", material: "Fabric", dimensions: "84x35x32", stock: 5, price: 1200, image: "https://picsum.photos/300/200", hint: "retro sofa" },
+  { id: "5", name: "Industrial Coffee Table", style: "Industrial", material: "Metal, Wood", dimensions: "48x24x18", stock: 12, price: 350, image: "https://picsum.photos/300/200", hint: "metal table" },
 ];
 
 export default function InventoryPage() {
@@ -64,37 +65,43 @@ export default function InventoryPage() {
       {/* Inventory Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {inventoryItems.map((item) => (
-          <Card key={item.id} className="overflow-hidden transition-shadow duration-200 hover:shadow-lg">
-            <CardHeader className="p-0">
-              <div className="relative h-48 w-full">
-                <Image
-                  src={item.image}
-                  alt={item.name}
-                  layout="fill"
-                  objectFit="cover"
-                  data-ai-hint={item.hint}
-                  className="transition-transform duration-300 group-hover:scale-105"
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="p-4">
-              <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
-              <CardDescription className="text-sm text-muted-foreground mb-2">
-                {item.style} / {item.material}
-              </CardDescription>
-              <p className="text-sm">Dimensions: {item.dimensions}</p>
-              <p className="text-sm">Stock: <span className={item.stock < 10 ? 'text-destructive font-medium' : ''}>{item.stock}</span></p>
-              <p className="text-lg font-semibold mt-2">${item.price.toFixed(2)}</p>
-            </CardContent>
-            <CardFooter className="p-4 pt-0">
-              <Button variant="outline" size="sm" className="w-full">View Details</Button>
-            </CardFooter>
+          <Card key={item.id} className="overflow-hidden transition-shadow duration-200 hover:shadow-lg group"> {/* Added group class */}
+            <Link href={`/inventory/${item.id}`} className="block"> {/* Wrap Card content in Link */}
+              <CardHeader className="p-0">
+                <div className="relative h-48 w-full">
+                  <Image
+                    src={item.image}
+                    alt={item.name}
+                    layout="fill"
+                    objectFit="cover"
+                    data-ai-hint={item.hint}
+                    className="transition-transform duration-300 group-hover:scale-105"
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="p-4">
+                <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
+                <CardDescription className="text-sm text-muted-foreground mb-2">
+                  {item.style} / {item.material}
+                </CardDescription>
+                <p className="text-sm">Dimensions: {item.dimensions}</p>
+                <p className="text-sm">Stock: <span className={item.stock < 10 ? 'text-destructive font-medium' : ''}>{item.stock}</span></p>
+                <p className="text-lg font-semibold mt-2">${item.price.toFixed(2)}</p>
+              </CardContent>
+               {/* Remove Button from CardFooter to make the whole card clickable */}
+            </Link>
+             {/* Optionally keep a footer for actions if needed, but link is above */}
+             {/* <CardFooter className="p-4 pt-0">
+               <Button variant="outline" size="sm" className="w-full" asChild>
+                  <Link href={`/inventory/${item.id}`}>View Details</Link>
+               </Button>
+             </CardFooter> */}
           </Card>
         ))}
       </div>
        {/* Placeholder for when no items match filter/search */}
        {inventoryItems.length === 0 && (
-         <div className="text-center py-12 text-muted-foreground">
+         <div className="text-center py-12 text-muted-foreground col-span-full"> {/* Ensure placeholder spans full width */}
            <Box className="mx-auto h-12 w-12 mb-4" />
            <p>No inventory items found matching your criteria.</p>
          </div>
