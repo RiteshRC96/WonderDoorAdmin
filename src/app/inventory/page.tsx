@@ -1,14 +1,13 @@
 
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Filter, Search, Box, Info, AlertTriangle } from "lucide-react";
-import Image from 'next/image';
+import { PlusCircle, Filter, Search, Box, AlertTriangle } from "lucide-react";
 import Link from 'next/link';
 import { db, collection, getDocs } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
 import type { AddItemInput } from '@/schemas/inventory'; // Import the type for structure
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
+import { InventoryItemCard } from "@/components/inventory/inventory-item-card"; // Import the new client component
 
 // Define the structure of an inventory item including its ID
 interface InventoryItem extends AddItemInput {
@@ -35,6 +34,13 @@ async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: st
       items.push({ id: doc.id, ...(doc.data() as AddItemInput) });
     });
     console.log(`Fetched ${items.length} inventory items.`);
+     // Sort items by creation date or name, newest first if createdAt exists
+     items.sort((a, b) => {
+        // Assuming createdAt is stored as a Firestore Timestamp or JS Date
+        const dateA = (a as any).createdAt?.toDate ? (a as any).createdAt.toDate() : new Date(0);
+        const dateB = (b as any).createdAt?.toDate ? (b as any).createdAt.toDate() : new Date(0);
+        return dateB.getTime() - dateA.getTime(); // Sort descending
+      });
     return { items };
   } catch (error) {
     const errorMessage = `Error fetching inventory items from Firestore: ${error instanceof Error ? error.message : String(error)}`;
@@ -120,31 +126,8 @@ export default async function InventoryPage() {
       {!fetchError && ( // Only show grid if no error occurred
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {inventoryItems.map((item) => (
-            <Card key={item.id} className="overflow-hidden transition-shadow duration-200 hover:shadow-lg group">
-              <Link href={`/inventory/${item.id}`} className="block">
-                <CardHeader className="p-0">
-                  <div className="relative h-48 w-full">
-                    <Image
-                      src={item.imageUrl || `https://picsum.photos/seed/${item.id}/300/200`} // Fallback image
-                      alt={item.name}
-                      layout="fill"
-                      objectFit="cover"
-                      data-ai-hint={item.imageHint || 'product item'}
-                      className="transition-transform duration-300 group-hover:scale-105"
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent className="p-4">
-                  <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
-                  <CardDescription className="text-sm text-muted-foreground mb-2">
-                    {item.style} / {item.material}
-                  </CardDescription>
-                  <p className="text-sm">Dimensions: {item.dimensions}</p>
-                  <p className="text-sm">Stock: <span className={item.stock < 10 ? 'text-destructive font-medium' : ''}>{item.stock}</span></p>
-                  <p className="text-lg font-semibold mt-2">${item.price?.toFixed(2) || 'N/A'}</p>
-                </CardContent>
-              </Link>
-            </Card>
+             // Use the client component for each card
+             <InventoryItemCard key={item.id} item={item} />
           ))}
         </div>
       )}

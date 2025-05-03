@@ -3,7 +3,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { AddItemSchema, type AddItemInput } from '@/schemas/inventory';
-import { db, collection, addDoc } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
+import { db, collection, addDoc, doc, deleteDoc } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
 
 // Server Action to add a new inventory item to Firestore
 export async function addItemAction(data: AddItemInput): Promise<{ success: boolean; message: string; itemId?: string; errors?: Record<string, string[]> | null }> {
@@ -53,9 +53,7 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
     console.log(`Successfully added item with ID: ${docRef.id}`);
 
     // Revalidate the inventory list page cache to show the new item
-    // Use a tag-based or path-based revalidation strategy
     revalidatePath('/inventory'); // Revalidate the main inventory listing page
-    revalidatePath(`/inventory/${docRef.id}`); // Revalidate the specific item page (though less critical here)
 
 
     // Return success and the actual document ID
@@ -74,6 +72,42 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
       success: false,
       message: "Failed to add item due to a database error. Please try again.", // Keep UI message simple
       errors: null, // Indicate no specific field errors for a general server error
+    };
+  }
+}
+
+
+// Server Action to delete an inventory item from Firestore
+export async function deleteItemAction(itemId: string): Promise<{ success: boolean; message: string; }> {
+  if (!itemId) {
+      return { success: false, message: "Item ID is required." };
+  }
+  // Ensure Firestore is initialized before proceeding
+  if (!db) {
+    const errorMessage = "Firestore database is not initialized. Check Firebase configuration. Cannot delete item.";
+    console.error(errorMessage);
+    return {
+      success: false,
+      message: "Database configuration error. Unable to delete item.",
+    };
+  }
+
+  try {
+    console.log(`Attempting to delete item with ID: ${itemId}`);
+    const itemDocRef = doc(db, 'inventory', itemId);
+    await deleteDoc(itemDocRef);
+    console.log(`Successfully deleted item with ID: ${itemId}`);
+
+    revalidatePath('/inventory'); // Revalidate the inventory list
+
+    return { success: true, message: "Item deleted successfully." };
+
+  } catch (error) {
+    const errorMessage = `Error deleting item from Firestore (ID: ${itemId}): ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMessage);
+    return {
+      success: false,
+      message: "Failed to delete item due to a database error. Please try again.",
     };
   }
 }

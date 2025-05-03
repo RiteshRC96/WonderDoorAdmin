@@ -1,6 +1,6 @@
 // src/lib/firebase/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, getDoc, addDoc, type Firestore } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, getDoc, addDoc, deleteDoc, type Firestore } from 'firebase/firestore'; // Added deleteDoc import
 // Import getAnalytics if needed, based on config
 // import { getAnalytics } from "firebase/analytics";
 import { firebaseConfig, isFirebaseConfigValid } from './config';
@@ -57,4 +57,4 @@ if (app) {
 // Export app and db. Check if db is null before using it elsewhere.
 export { app, db };
 // Export commonly used Firestore functions for convenience
-export { collection, getDocs, doc, getDoc, addDoc };
+export { collection, getDocs, doc, getDoc, addDoc, deleteDoc }; // Added deleteDoc export
