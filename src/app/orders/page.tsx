@@ -54,14 +54,21 @@ async function getOrders(): Promise<{ orders: Order[]; error?: string }> {
         updatedAt, // Serialized date string or undefined
         // Ensure items array exists, even if empty (though schema enforces min 1)
         items: data.items || [],
+        // Ensure total is a number, default to 0 if missing/invalid
+        total: typeof data.total === 'number' ? data.total : 0,
       });
     });
     console.log(`Fetched ${orders.length} orders.`);
     return { orders };
   } catch (error) {
-    const errorMessage = `Error fetching orders from Firestore: ${error instanceof Error ? error.message : String(error)}`;
+     let errorMessage = `Error fetching orders from Firestore: ${error instanceof Error ? error.message : String(error)}`;
+       // Check for specific Firestore index error
+       if (error instanceof Error && error.message.toLowerCase().includes("index")) { // More robust check for index errors
+          errorMessage = "Firestore query failed: A required index is missing. Please create the index in the Firebase console (Firestore Database > Indexes) for the 'orders' collection, ordered by 'createdAt' descending.";
+          console.warn(errorMessage);
+        }
     console.error(errorMessage);
-    return { orders: [], error: "Failed to load order data due to a database error." };
+    return { orders: [], error: errorMessage }; // Pass the potentially specific error message
   }
 }
 
@@ -77,6 +84,7 @@ const getStatusVariant = (status: string): "default" | "secondary" | "outline" |
     case 'delivered':
       return 'outline'; // Simple outline for completed
     case 'cancelled':
+    case 'failed': // Added failed payment
       return 'destructive';
     // Add payment statuses if needed, or handle separately
     case 'paid':
@@ -112,11 +120,17 @@ export default async function OrdersPage() {
              <AlertTitle>Error Loading Orders</AlertTitle>
              <AlertDescription>
                {fetchError}
+               {/* Specific guidance for common errors */}
                {fetchError.includes("initialization failed") && (
                  <span className="block mt-2 text-xs">
                    Please verify your Firebase setup in `.env.local` and restart the application.
                  </span>
                )}
+                {fetchError.includes("index") && (
+                  <span className="block mt-2 text-xs">
+                     A Firestore index might be required. Please check the Firebase console under Firestore Database &gt; Indexes. Create an index on the 'orders' collection for the 'createdAt' field (descending).
+                  </span>
+                 )}
              </AlertDescription>
            </Alert>
        )}

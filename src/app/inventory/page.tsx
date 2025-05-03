@@ -65,13 +65,13 @@ async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: st
   } catch (error) {
      let errorMessage = `Error fetching inventory items from Firestore: ${error instanceof Error ? error.message : String(error)}`;
       // Check for specific Firestore index error
-      if (error instanceof Error && error.message.includes("requires an index")) {
-         errorMessage += "\nSuggestion: Create the required Firestore index for ordering by 'createdAt'. Check the Firestore console indexes tab.";
-         console.warn("Firestore query failed: Missing index for ordering by 'createdAt'. Please create it in the Firebase console.");
+      if (error instanceof Error && error.message.toLowerCase().includes("index")) { // More robust check for index errors
+         errorMessage = "Firestore query failed: A required index is missing. Please create the index in the Firebase console (Firestore Database > Indexes) for the 'inventory' collection, ordered by 'createdAt' descending.";
+         console.warn(errorMessage);
        }
     console.error(errorMessage);
     // Return a generic error for actual database query errors
-    return { items: [], error: "Failed to load inventory data due to a database error. Check server logs for details." };
+    return { items: [], error: errorMessage }; // Pass the potentially specific error message
   }
 }
 
@@ -102,6 +102,7 @@ export default async function InventoryPage() {
             <AlertTitle>Error Loading Inventory</AlertTitle>
             <AlertDescription>
               {fetchError}
+              {/* Specific guidance for common errors */}
               {fetchError.includes("initialization failed") && (
                 <span className="block mt-2 text-xs">
                   Please verify your Firebase setup in `.env.local` and restart the application.
@@ -109,7 +110,7 @@ export default async function InventoryPage() {
               )}
                {fetchError.includes("index") && (
                  <span className="block mt-2 text-xs">
-                    A Firestore index might be required. Check the Firebase console under Firestore Database &gt; Indexes.
+                    A Firestore index might be required. Please check the Firebase console under Firestore Database &gt; Indexes. Create an index on the 'inventory' collection for the 'createdAt' field (descending).
                  </span>
                 )}
             </AlertDescription>

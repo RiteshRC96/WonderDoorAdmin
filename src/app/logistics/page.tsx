@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/firebase/firebase'; // Import Firestore functions
 import type { Shipment } from '@/schemas/shipment'; // Import the Shipment type
+import { ShipmentSchema } from '@/schemas/shipment'; // Import ShipmentSchema for status options
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 import { format } from 'date-fns'; // For formatting dates
@@ -61,7 +62,8 @@ async function getShipments(): Promise<{ shipments: Shipment[]; error?: string }
 
        shipments.push({
          id: doc.id,
-         ...data,
+         // Cast data to ShipmentInput after removing/converting timestamps
+         ...(data as Shipment), // Adjust casting as needed if fields differ
          createdAt,
          updatedAt,
          actualDelivery,
@@ -71,9 +73,14 @@ async function getShipments(): Promise<{ shipments: Shipment[]; error?: string }
      console.log(`Fetched ${shipments.length} shipments.`);
      return { shipments };
    } catch (error) {
-     const errorMessage = `Error fetching shipments from Firestore: ${error instanceof Error ? error.message : String(error)}`;
+     let errorMessage = `Error fetching shipments from Firestore: ${error instanceof Error ? error.message : String(error)}`;
+        // Check for specific Firestore index error
+        if (error instanceof Error && error.message.toLowerCase().includes("index")) { // More robust check for index errors
+            errorMessage = "Firestore query failed: A required index is missing. Please create the index in the Firebase console (Firestore Database > Indexes) for the 'shipments' collection, ordered by 'createdAt' descending.";
+            console.warn(errorMessage);
+        }
      console.error(errorMessage);
-     return { shipments: [], error: "Failed to load shipment data due to a database error." };
+     return { shipments: [], error: errorMessage }; // Pass the potentially specific error message
    }
 }
 
@@ -117,11 +124,17 @@ export default async function LogisticsPage() {
              <AlertTitle>Error Loading Shipments</AlertTitle>
              <AlertDescription>
                {fetchError}
+               {/* Specific guidance for common errors */}
                {fetchError.includes("initialization failed") && (
                  <span className="block mt-2 text-xs">
                    Please verify your Firebase setup in `.env.local` and restart the application.
                  </span>
                )}
+                {fetchError.includes("index") && (
+                 <span className="block mt-2 text-xs">
+                    A Firestore index might be required. Please check the Firebase console under Firestore Database &gt; Indexes. Create an index on the 'shipments' collection for the 'createdAt' field (descending).
+                 </span>
+                )}
              </AlertDescription>
            </Alert>
        )}
