@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -22,8 +21,10 @@ import { useToast } from "@/hooks/use-toast";
 import { deleteItemAction } from '@/app/inventory/actions'; // Import the delete action
 import type { AddItemInput } from '@/schemas/inventory'; // Import the type for structure
 
-interface InventoryItem extends AddItemInput {
+// Expect createdAt as a string (ISO format) from the Server Component
+interface InventoryItem extends Omit<AddItemInput, 'createdAt'> { // Omit potential createdAt from schema if it exists
   id: string;
+  createdAt?: string; // Expecting ISO string
 }
 
 interface InventoryItemCardProps {

@@ -1,17 +1,17 @@
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Filter, Search, Box, AlertTriangle } from "lucide-react";
 import Link from 'next/link';
-import { db, collection, getDocs } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
+import { db, collection, getDocs, Timestamp } from '@/lib/firebase/firebase'; // Import Firestore instance and functions, including Timestamp
 import type { AddItemInput } from '@/schemas/inventory'; // Import the type for structure
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 import { InventoryItemCard } from "@/components/inventory/inventory-item-card"; // Import the new client component
 
-// Define the structure of an inventory item including its ID
-interface InventoryItem extends AddItemInput {
+// Define the structure of an inventory item including its ID and serializable createdAt
+interface InventoryItem extends Omit<AddItemInput, 'createdAt'> { // Omit potential createdAt from schema if it exists
   id: string;
+  createdAt?: string; // Store as ISO string for serialization
 }
 
 // Function to fetch inventory items from Firestore
@@ -30,15 +30,26 @@ async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: st
     const querySnapshot = await getDocs(inventoryCollectionRef);
     const items: InventoryItem[] = [];
     querySnapshot.forEach((doc) => {
-      // Combine document ID with document data
-      items.push({ id: doc.id, ...(doc.data() as AddItemInput) });
+      const data = doc.data() as AddItemInput & { createdAt?: Timestamp }; // Expect potential Timestamp
+      // Convert Timestamp to ISO string for serialization
+      const createdAt = data.createdAt instanceof Timestamp
+        ? data.createdAt.toDate().toISOString()
+        : undefined;
+
+      // Remove the original createdAt from data if it exists before spreading
+      const { createdAt: _, ...restData } = data;
+
+      items.push({
+        id: doc.id,
+        ...restData, // Spread the rest of the data
+        createdAt, // Add the serialized date string
+      });
     });
     console.log(`Fetched ${items.length} inventory items.`);
-     // Sort items by creation date or name, newest first if createdAt exists
+     // Sort items by creation date string, newest first
      items.sort((a, b) => {
-        // Assuming createdAt is stored as a Firestore Timestamp or JS Date
-        const dateA = (a as any).createdAt?.toDate ? (a as any).createdAt.toDate() : new Date(0);
-        const dateB = (b as any).createdAt?.toDate ? (b as any).createdAt.toDate() : new Date(0);
+        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
         return dateB.getTime() - dateA.getTime(); // Sort descending
       });
     return { items };
@@ -127,6 +138,7 @@ export default async function InventoryPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {inventoryItems.map((item) => (
              // Use the client component for each card
+             // Pass the item with the serialized date
              <InventoryItemCard key={item.id} item={item} />
           ))}
         </div>
