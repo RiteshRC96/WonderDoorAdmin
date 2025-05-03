@@ -22,10 +22,12 @@ interface InventoryItem extends AddItemInput {
 
 // Function to fetch a single item's details from Firestore
 async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | null; error?: string }> {
-  if (!db) {
+  // Explicitly check if db is null, indicating initialization failure
+  if (db === null) {
     const errorMessage = "Firestore database is not initialized. Cannot fetch item details. Please check Firebase configuration in .env.local and restart the server.";
     console.error(errorMessage);
-    return { item: null, error: errorMessage };
+    // Return a specific error message related to configuration/initialization
+    return { item: null, error: "Database initialization failed. Please check configuration." };
   }
 
   try {
@@ -40,6 +42,7 @@ async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | n
            id: docSnap.id,
            ...data,
            // --- Placeholder Related Data ---
+           // Example: Link item 'MOD-OAK-3680' to specific orders/shipments
            relatedOrders: data.sku === 'MOD-OAK-3680' ? [{id: 'ORD-001', date: '2024-07-20'}] : [],
            relatedShipments: data.sku === 'MOD-OAK-3680' ? [{id: 'SHP-103', status: 'Label Created'}] : [],
            // --- End Placeholder ---
@@ -52,7 +55,8 @@ async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | n
   } catch (error) {
     const errorMessage = `Error fetching item details from Firestore for ID ${itemId}: ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMessage);
-    return { item: null, error: "Failed to load item details due to a database error." }; // Return generic error for UI
+    // Return generic error for actual database query errors
+    return { item: null, error: "Failed to load item details due to a database error." };
   }
 }
 
@@ -90,7 +94,15 @@ export default async function InventoryItemPage({ params }: { params: { itemId: 
          <Alert variant="destructive">
            <AlertTriangle className="h-4 w-4" />
            <AlertTitle>Error Loading Item Details</AlertTitle>
-           <AlertDescription>{fetchError}</AlertDescription>
+           <AlertDescription>
+             {fetchError}
+              {/* Add a hint if the error is about initialization */}
+              {fetchError.includes("initialization failed") && (
+                <span className="block mt-2 text-xs">
+                  Please verify your Firebase setup in `.env.local` and restart the application.
+                </span>
+              )}
+            </AlertDescription>
          </Alert>
        </div>
      );

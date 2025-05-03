@@ -17,10 +17,12 @@ interface InventoryItem extends AddItemInput {
 
 // Function to fetch inventory items from Firestore
 async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: string }> {
-  if (!db) {
+  // Explicitly check if db is null, indicating initialization failure
+  if (db === null) {
     const errorMessage = "Firestore database is not initialized. Cannot fetch inventory. Please check Firebase configuration in .env.local and restart the server.";
     console.error(errorMessage);
-    return { items: [], error: errorMessage }; // Return error message
+    // Return a specific error message related to configuration/initialization
+    return { items: [], error: "Database initialization failed. Please check configuration." };
   }
 
   try {
@@ -37,7 +39,8 @@ async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: st
   } catch (error) {
     const errorMessage = `Error fetching inventory items from Firestore: ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMessage);
-    return { items: [], error: "Failed to load inventory data due to a database error." }; // Return generic error for UI
+    // Return a generic error for actual database query errors
+    return { items: [], error: "Failed to load inventory data due to a database error." };
   }
 }
 
@@ -64,6 +67,12 @@ export default async function InventoryPage() {
             <AlertTitle>Error Loading Inventory</AlertTitle>
             <AlertDescription>
               {fetchError}
+              {/* Add a hint if the error is about initialization */}
+              {fetchError.includes("initialization failed") && (
+                <span className="block mt-2 text-xs">
+                  Please verify your Firebase setup in `.env.local` and restart the application.
+                </span>
+              )}
             </AlertDescription>
           </Alert>
       )}
@@ -127,8 +136,7 @@ export default async function InventoryPage() {
                 </CardHeader>
                 <CardContent className="p-4">
                   <CardTitle className="text-lg mb-1">{item.name}</CardTitle>
-                   {/* Correctly using CardDescription */}
-                   <CardDescription className="text-sm text-muted-foreground mb-2">
+                  <CardDescription className="text-sm text-muted-foreground mb-2">
                     {item.style} / {item.material}
                   </CardDescription>
                   <p className="text-sm">Dimensions: {item.dimensions}</p>
