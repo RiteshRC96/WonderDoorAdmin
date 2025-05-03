@@ -1,82 +1,155 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Image from 'next/image';
-import { ArrowLeft, Edit, Printer, Truck, Package, User, Calendar, Hash, DollarSign } from 'lucide-react';
+import { ArrowLeft, Edit, Printer, Truck, Package, User, Calendar, Hash, DollarSign, Home, ChevronRight, AlertTriangle } from 'lucide-react'; // Added icons
 import Link from 'next/link';
+import { db, doc, getDoc, Timestamp } from '@/lib/firebase/firebase'; // Import Firestore functions
+import type { Order } from '@/schemas/order'; // Import Order type
+import { notFound } from 'next/navigation'; // For 404
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
+import { format } from 'date-fns'; // For formatting dates
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"; // Import Breadcrumb
 
-// Placeholder data fetching function - replace with actual data logic
-async function getOrderDetails(orderId: string) {
-  // Simulate API call
-  await new Promise(resolve => setTimeout(resolve, 50));
-  const orders = [
-     {
-      id: 'ORD-001', customer: { name: 'Alice Smith', email: 'alice.s@example.com', phone: '555-1234', address: '789 Pine Ln, Anytown, USA 12345'}, date: '2024-07-20', total: 450.00, status: 'Processing', items: [
-        { id: 1, name: "Modern Oak Door", sku: "MOD-OAK-3680", quantity: 1, price: 450.00, image: "https://picsum.photos/100/100", hint: "modern door" }
-      ], paymentStatus: 'Paid', shippingMethod: 'Standard Ground', shipmentId: 'SHP-103'
-    },
-    {
-      id: 'ORD-002', customer: { name: 'Bob Johnson', email: 'b.johnson@example.com', phone: '555-5678', address: '123 Main St, Sometown, USA 67890' }, date: '2024-07-19', total: 1200.00, status: 'Shipped', items: [
-        { id: 4, name: "Mid-Century Sofa", sku: "SOF-MCM-FAB-84", quantity: 1, price: 1200.00, image: "https://picsum.photos/100/100", hint: "retro sofa" }
-      ], paymentStatus: 'Paid', shippingMethod: 'Freight', shipmentId: 'SHP-101'
-    },
-     {
-      id: 'ORD-003', customer: { name: 'Charlie Brown', email: 'charlie@example.com', phone: '555-9012', address: '101 Maple Dr, Villagetown, USA 11223' }, date: '2024-07-18', total: 350.00, status: 'Delivered', items: [
-        { id: 5, name: "Industrial Coffee Table", sku: "TBL-IND-MW-48", quantity: 1, price: 350.00, image: "https://picsum.photos/100/100", hint: "metal table" }
-      ], paymentStatus: 'Paid', shippingMethod: 'Local Delivery', shipmentId: 'SHP-104'
-    },
-     {
-      id: 'ORD-004', customer: { name: 'Diana Prince', email: 'diana.p@example.com', phone: '555-3456', address: '456 Oak Ave, Cityville, USA 44556' }, date: '2024-07-17', total: 620.00, status: 'Processing', items: [
-        { id: 2, name: "Classic Walnut Panel", sku: "CLS-WAL-3280", quantity: 1, price: 620.00, image: "https://picsum.photos/100/100", hint: "classic door" }
-      ], paymentStatus: 'Pending', shippingMethod: 'Standard Ground', shipmentId: 'SHP-102'
-    },
-     {
-      id: 'ORD-005', customer: { name: 'Ethan Hunt', email: 'ethan.h@example.com', phone: '555-7890', address: 'Secret Location' }, date: '2024-07-16', total: 750.00, status: 'Cancelled', items: [
-        { id: 3, name: "Minimalist Pine Door", sku: "MIN-PIN-3078", quantity: 1, price: 300.00, image: "https://picsum.photos/100/100", hint: "pine door" },
-        { id: 1, name: "Modern Oak Door", sku: "MOD-OAK-3680", quantity: 1, price: 450.00, image: "https://picsum.photos/100/100", hint: "oak door" }
-      ], paymentStatus: 'Refunded', shippingMethod: 'N/A', shipmentId: null
-    },
-  ];
-  return orders.find(order => order.id === orderId);
+// Function to fetch a single order's details from Firestore
+async function getOrderDetails(orderId: string): Promise<{ order: Order | null; error?: string }> {
+  if (!db) {
+    const errorMessage = "Database configuration error. Unable to fetch order details.";
+    console.error("Firestore database is not initialized. Cannot fetch order details.");
+    return { order: null, error: "Database initialization failed. Please check configuration." };
+  }
+
+  try {
+    console.log(`Attempting to fetch order details for ID: ${orderId}`);
+    const orderDocRef = doc(db, 'orders', orderId);
+    const docSnap = await getDoc(orderDocRef);
+
+    if (docSnap.exists()) {
+      console.log("Order found in Firestore.");
+       const data = docSnap.data() as Omit<Order, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
+
+       // Convert Timestamps to ISO strings for serialization
+       const createdAt = data.createdAt instanceof Timestamp
+         ? data.createdAt.toDate().toISOString()
+         : new Date().toISOString(); // Fallback
+       const updatedAt = data.updatedAt instanceof Timestamp
+         ? data.updatedAt.toDate().toISOString()
+         : undefined;
+
+      const orderData = {
+        id: docSnap.id,
+        ...data,
+        createdAt,
+        updatedAt,
+         items: data.items || [], // Ensure items array exists
+         // Ensure total is a number, default to 0 if missing/invalid
+         total: typeof data.total === 'number' ? data.total : 0,
+      };
+      return { order: orderData };
+    } else {
+      console.log("No such document found for order ID:", orderId);
+      return { order: null }; // Not found is handled by notFound()
+    }
+  } catch (error) {
+    const errorMessage = `Error fetching order details from Firestore for ID ${orderId}: ${error instanceof Error ? error.message : String(error)}`;
+    console.error(errorMessage);
+    return { order: null, error: "Failed to load order details due to a database error." };
+  }
 }
 
+// Re-use status variant logic from the list page
 const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "destructive" => {
-  switch (status.toLowerCase()) {
+   switch (status?.toLowerCase()) {
     case 'processing':
-      return 'default'; // Gold
+    case 'pending payment':
+      return 'default';
     case 'shipped':
-      return 'secondary'; // Blue/Green
+      return 'secondary';
     case 'delivered':
-      return 'outline'; // Outline
+      return 'outline';
     case 'cancelled':
-    case 'refunded':
-      return 'destructive'; // Red
+    case 'failed': // Added failed payment
+      return 'destructive';
     case 'paid':
         return 'outline';
-    case 'pending':
+    case 'pending': // Payment pending
         return 'secondary';
+    case 'refunded':
+        return 'destructive';
     default:
       return 'secondary';
   }
 };
 
 export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
-  const order = await getOrderDetails(params.orderId);
+  const { order, error: fetchError } = await getOrderDetails(params.orderId);
 
-  if (!order) {
-    return <div className="container mx-auto py-6 text-center text-destructive">Order not found.</div>;
-  }
+   // Handle fetch error first
+   if (fetchError) {
+      return (
+        <div className="container mx-auto py-6 space-y-6">
+          {/* Breadcrumbs for Error Page */}
+         <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem><BreadcrumbLink asChild><Link href="/"><Home className="h-4 w-4"/></Link></BreadcrumbLink></BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem><BreadcrumbLink asChild><Link href="/orders">Orders</Link></BreadcrumbLink></BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem><BreadcrumbPage>Error</BreadcrumbPage></BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Error Loading Order Details</AlertTitle>
+            <AlertDescription>
+              {fetchError}
+              {fetchError.includes("initialization failed") && (
+                <span className="block mt-2 text-xs">
+                  Please verify your Firebase setup in `.env.local` and restart the application.
+                </span>
+              )}
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
+   }
 
-  const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  // Assuming flat $50 shipping and 7% tax for demonstration
-  const shippingCost = order.status !== 'Cancelled' ? 50.00 : 0;
-  const tax = order.status !== 'Cancelled' ? subtotal * 0.07 : 0;
-  const total = subtotal + shippingCost + tax;
+   // If no error but order is null, then it's not found
+   if (!order) {
+     notFound(); // Use Next.js notFound utility for 404 page
+   }
+
+   // --- Calculation Note ---
+   // We are now using the `total` directly from the Order object fetched from Firestore.
+   // The calculation logic resides in the `createOrderAction` or potentially an update action.
+   // For display purposes, we'll assume shipping/tax were included in the stored `total`.
+   // In a real app, you might store subtotal, tax, shipping separately for clarity.
+   const displayTotal = order.total;
+   // --- End Calculation Note ---
 
   return (
     <div className="container mx-auto py-6 animate-subtle-fade-in space-y-6">
+       {/* Breadcrumbs */}
+        <Breadcrumb>
+           <BreadcrumbList>
+             <BreadcrumbItem><BreadcrumbLink asChild><Link href="/"><Home className="h-4 w-4"/></Link></BreadcrumbLink></BreadcrumbItem>
+             <BreadcrumbSeparator />
+             <BreadcrumbItem><BreadcrumbLink asChild><Link href="/orders">Orders</Link></BreadcrumbLink></BreadcrumbItem>
+             <BreadcrumbSeparator />
+             <BreadcrumbItem><BreadcrumbPage>Order {order.id.substring(0, 8)}...</BreadcrumbPage></BreadcrumbItem>
+           </BreadcrumbList>
+         </Breadcrumb>
+
        <div className="flex items-center justify-between">
          <Button variant="outline" size="sm" asChild>
            <Link href="/orders">
@@ -85,26 +158,31 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
            </Link>
          </Button>
          <div className="flex gap-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled>
               <Printer className="mr-2 h-4 w-4" />
-              Print Invoice
+              Print Invoice (soon)
             </Button>
-           <Button size="sm">
+           <Button size="sm" disabled>
              <Edit className="mr-2 h-4 w-4" />
-             Edit Order
+             Edit Order (soon)
            </Button>
          </div>
        </div>
 
-       <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-4">
+       <Card className="shadow-md">
+          <CardHeader className="flex flex-row items-start justify-between pb-4 gap-4"> {/* Allow wrapping */}
              <div>
-              <CardTitle className="text-2xl font-bold">Order {order.id}</CardTitle>
-              <CardDescription className="flex items-center gap-2 text-sm text-muted-foreground">
-                 <Calendar className="h-4 w-4"/> Placed on {order.date}
+              <CardTitle className="text-2xl lg:text-3xl font-bold">Order #{order.id}</CardTitle>
+              <CardDescription className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                 <Calendar className="h-4 w-4"/> Placed on {format(new Date(order.createdAt), 'PPP p')} {/* More detailed date */}
                </CardDescription>
+                {order.updatedAt && order.updatedAt !== order.createdAt && (
+                     <CardDescription className="flex items-center gap-2 text-xs text-muted-foreground/80 mt-1">
+                      Last updated: {format(new Date(order.updatedAt), 'PP p')}
+                    </CardDescription>
+                )}
              </div>
-              <Badge variant={getStatusVariant(order.status)} className="text-lg px-4 py-1">{order.status}</Badge>
+              <Badge variant={getStatusVariant(order.status)} className="text-base md:text-lg px-3 py-1 md:px-4 md:py-1.5 whitespace-nowrap shrink-0">{order.status}</Badge>
           </CardHeader>
           <Separator />
           <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
@@ -112,8 +190,8 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
             <div className="space-y-2">
                <h3 className="text-lg font-semibold flex items-center gap-2"><User className="h-5 w-5 text-muted-foreground" /> Customer Details</h3>
                <p className="text-sm font-medium">{order.customer.name}</p>
-               <p className="text-sm text-muted-foreground">{order.customer.email}</p>
-               <p className="text-sm text-muted-foreground">{order.customer.phone}</p>
+               {order.customer.email && <p className="text-sm text-muted-foreground">{order.customer.email}</p>}
+               {order.customer.phone && <p className="text-sm text-muted-foreground">{order.customer.phone}</p>}
                <p className="text-sm text-muted-foreground">{order.customer.address}</p>
             </div>
 
@@ -121,26 +199,26 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
              <div className="space-y-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2"><Hash className="h-5 w-5 text-muted-foreground" /> Order Summary</h3>
                 <p className="text-sm"><span className="text-muted-foreground">Payment Status:</span> <Badge variant={getStatusVariant(order.paymentStatus)}>{order.paymentStatus}</Badge></p>
-                 <p className="text-sm"><span className="text-muted-foreground">Shipping Method:</span> {order.shippingMethod}</p>
-                 {order.shipmentId && (
-                    <p className="text-sm"><span className="text-muted-foreground">Shipment:</span> <Link href={`/logistics/${order.shipmentId}`} className="text-primary hover:underline flex items-center gap-1"><Truck className="h-4 w-4"/>{order.shipmentId}</Link></p>
+                 <p className="text-sm"><span className="text-muted-foreground">Shipping Method:</span> {order.shippingMethod || 'N/A'}</p>
+                 {order.shipmentId ? (
+                    <p className="text-sm"><span className="text-muted-foreground">Shipment:</span> <Link href={`/logistics/${order.shipmentId}`} className="text-primary hover:underline flex items-center gap-1"><Truck className="h-4 w-4"/>{order.shipmentId.substring(0,8)}...</Link></p>
+                 ) : (
+                     <p className="text-sm italic text-muted-foreground">No shipment linked yet.</p>
                  )}
-                 <p className="text-sm"><span className="text-muted-foreground">Total Items:</span> {order.items.length}</p>
+                 <p className="text-sm"><span className="text-muted-foreground">Total Items:</span> {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
              </div>
 
-              {/* Totals */}
+              {/* Totals - Simplified as total comes from DB */}
              <div className="space-y-2 md:text-right">
-                 <h3 className="text-lg font-semibold flex items-center gap-2 md:justify-end"><DollarSign className="h-5 w-5 text-muted-foreground" /> Totals</h3>
-                 <p className="text-sm"><span className="text-muted-foreground">Subtotal:</span> ${subtotal.toFixed(2)}</p>
-                 <p className="text-sm"><span className="text-muted-foreground">Shipping:</span> ${shippingCost.toFixed(2)}</p>
-                 <p className="text-sm"><span className="text-muted-foreground">Tax (7%):</span> ${tax.toFixed(2)}</p>
-                 <Separator className="my-1"/>
-                 <p className="text-lg font-bold"><span className="text-muted-foreground">Total:</span> ${total.toFixed(2)}</p>
+                 <h3 className="text-lg font-semibold flex items-center gap-2 md:justify-end"><DollarSign className="h-5 w-5 text-muted-foreground" /> Order Total</h3>
+                 {/* Displaying the total stored in the database */}
+                 <p className="text-2xl font-bold text-primary">${displayTotal.toFixed(2)}</p>
+                 <p className="text-xs text-muted-foreground md:text-right">(Includes items, shipping, taxes)</p>
              </div>
           </CardContent>
        </Card>
 
-        <Card>
+        <Card className="shadow-md">
          <CardHeader>
            <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-muted-foreground"/> Items Ordered</CardTitle>
          </CardHeader>
@@ -152,23 +230,32 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                  <TableHead>Product</TableHead>
                  <TableHead>SKU</TableHead>
                  <TableHead className="text-center">Quantity</TableHead>
-                 <TableHead className="text-right">Price</TableHead>
+                 <TableHead className="text-right">Unit Price</TableHead>
                  <TableHead className="text-right">Line Total</TableHead>
                </TableRow>
              </TableHeader>
              <TableBody>
-               {order.items.map((item) => (
-                 <TableRow key={item.id}>
+               {order.items.map((item, index) => ( // Use index for key if item IDs aren't unique within order
+                 <TableRow key={`${item.itemId}-${index}`}>
                    <TableCell>
-                     <Image src={item.image} alt={item.name} width={64} height={64} className="rounded-md aspect-square object-cover" data-ai-hint={item.hint} />
+                     <Image
+                        src={item.image || `https://picsum.photos/seed/${item.itemId}/100/100`}
+                        alt={item.name}
+                        width={64} height={64}
+                        className="rounded-md aspect-square object-cover border"
+                        data-ai-hint={item.imageHint || 'product item'}
+                      />
                    </TableCell>
                    <TableCell className="font-medium">
-                      <Link href={`/inventory/${item.id}`} className="hover:underline">{item.name}</Link>
+                      {/* Link to the actual inventory item */}
+                      <Link href={`/inventory/${item.itemId}`} className="hover:underline" title={`View ${item.name}`}>
+                        {item.name}
+                      </Link>
                     </TableCell>
                    <TableCell>{item.sku}</TableCell>
                    <TableCell className="text-center">{item.quantity}</TableCell>
                    <TableCell className="text-right">${item.price.toFixed(2)}</TableCell>
-                   <TableCell className="text-right">${(item.price * item.quantity).toFixed(2)}</TableCell>
+                   <TableCell className="text-right font-medium">${(item.price * item.quantity).toFixed(2)}</TableCell>
                  </TableRow>
                ))}
              </TableBody>
@@ -187,10 +274,13 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
   );
 }
 
-// Optional: Add dynamic metadata generation
-// export async function generateMetadata({ params }: { params: { orderId: string } }) {
-//   const order = await getOrderDetails(params.orderId);
-//   return {
-//     title: order ? `Order ${order.id} | Showroom Manager` : 'Order Details | Showroom Manager',
-//   };
-// }
+// Generate dynamic metadata
+export async function generateMetadata({ params }: { params: { orderId: string } }) {
+  const { order } = await getOrderDetails(params.orderId);
+  return {
+    title: order ? `Order #${order.id} | Showroom Manager` : 'Order Not Found | Showroom Manager',
+  };
+}
+
+// Ensure dynamic rendering because data is fetched on each request
+export const dynamic = 'force-dynamic';

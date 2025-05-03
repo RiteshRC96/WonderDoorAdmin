@@ -1,10 +1,11 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Filter, Search, Truck, Navigation, MoreHorizontal } from "lucide-react";
+import { PlusCircle, Filter, Search, Truck, Navigation, MoreHorizontal, AlertTriangle, PackageSearch } from "lucide-react"; // Added icons
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,80 +14,159 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/firebase/firebase'; // Import Firestore functions
+import type { Shipment } from '@/schemas/shipment'; // Import the Shipment type
+import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
+import { format } from 'date-fns'; // For formatting dates
 
-// Placeholder data - replace with actual data fetching
-const shipments = [
-  { id: 'SHP-101', orderId: 'ORD-002', carrier: 'FastFreight', trackingNumber: 'FF123456789', status: 'In Transit', origin: 'Warehouse A', destination: '123 Main St', estimatedDelivery: '2024-07-25' },
-  { id: 'SHP-102', orderId: 'ORD-004', carrier: 'QuickShip', trackingNumber: 'QS987654321', status: 'Out for Delivery', origin: 'Warehouse B', destination: '456 Oak Ave', estimatedDelivery: '2024-07-22' },
-  { id: 'SHP-103', orderId: 'ORD-001', carrier: 'ReliableTrans', trackingNumber: 'RT112233445', status: 'Label Created', origin: 'Showroom', destination: '789 Pine Ln', estimatedDelivery: '2024-07-26' },
-  { id: 'SHP-104', orderId: 'ORD-003', carrier: 'FastFreight', trackingNumber: 'FF998877665', status: 'Delivered', origin: 'Warehouse A', destination: '101 Maple Dr', estimatedDelivery: '2024-07-20' },
-];
+
+// Function to fetch shipments from Firestore
+async function getShipments(): Promise<{ shipments: Shipment[]; error?: string }> {
+   if (!db) {
+     const errorMessage = "Firestore database is not initialized. Cannot fetch shipments.";
+     console.error(errorMessage);
+     return { shipments: [], error: "Database initialization failed. Please check configuration." };
+   }
+
+   try {
+     console.log("Attempting to fetch shipments from Firestore...");
+     const shipmentsCollectionRef = collection(db, 'shipments');
+     // Add ordering by creation date, newest first
+     const q = query(shipmentsCollectionRef, orderBy('createdAt', 'desc'));
+     const querySnapshot = await getDocs(q);
+
+     const shipments: Shipment[] = [];
+     querySnapshot.forEach((doc) => {
+        const data = doc.data() as Omit<Shipment, 'id' | 'createdAt' | 'updatedAt' | 'actualDelivery' | 'history'> & {
+             createdAt?: Timestamp,
+             updatedAt?: Timestamp,
+             actualDelivery?: Timestamp,
+             history?: { timestamp: Timestamp | string }[] // Handle potential mixed types during transition
+           };
+
+       // Convert Timestamps to ISO strings for serialization
+       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+       const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
+       const actualDelivery = data.actualDelivery instanceof Timestamp ? data.actualDelivery.toDate().toISOString() : undefined;
+
+        // Ensure history timestamps are strings
+       const history = (data.history || []).map(event => ({
+           ...event,
+           timestamp: event.timestamp instanceof Timestamp
+               ? event.timestamp.toDate().toISOString()
+               : typeof event.timestamp === 'string' ? event.timestamp : new Date().toISOString() // Fallback
+       }));
+
+
+       shipments.push({
+         id: doc.id,
+         ...data,
+         createdAt,
+         updatedAt,
+         actualDelivery,
+         history, // Serialized history
+       });
+     });
+     console.log(`Fetched ${shipments.length} shipments.`);
+     return { shipments };
+   } catch (error) {
+     const errorMessage = `Error fetching shipments from Firestore: ${error instanceof Error ? error.message : String(error)}`;
+     console.error(errorMessage);
+     return { shipments: [], error: "Failed to load shipment data due to a database error." };
+   }
+}
+
 
 const getShipmentStatusVariant = (status: string): "default" | "secondary" | "outline" | "destructive" => {
-  switch (status.toLowerCase()) {
+  // Keep original variants
+  switch (status?.toLowerCase()) {
     case 'label created':
-      return 'secondary'; // Soft blue/green for initial state
+      return 'secondary';
+    case 'picked up': // Added Picked Up
     case 'in transit':
-      return 'default'; // Gold for active transit
-     case 'out for delivery':
-       return 'default'; // Gold for active delivery attempt
+    case 'out for delivery':
+      return 'default'; // Gold for active states
     case 'delivered':
       return 'outline'; // Outline for completed
     case 'exception':
+    case 'delayed': // Added Delayed
       return 'destructive'; // Destructive for issues
     default:
-      return 'secondary';
+      return 'secondary'; // Default for unknown/other states
   }
 };
 
 
-export default function LogisticsPage() {
+export default async function LogisticsPage() {
+  const { shipments, error: fetchError } = await getShipments();
+
   return (
-    <div className="container mx-auto py-6 animate-subtle-fade-in">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-foreground">Logistics</h1>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Shipment
+    <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8"> {/* Added spacing */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+        <h1 className="text-4xl font-bold text-foreground">Logistics</h1>
+        <Button disabled> {/* Disabled until implemented */}
+          <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Shipment (soon)
         </Button>
       </div>
 
-       {/* Filters and Search */}
-       <div className="mb-6 flex flex-col md:flex-row gap-4">
-         <div className="relative flex-grow">
-           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-           <Input placeholder="Search by Shipment ID, Order ID, or Tracking..." className="pl-10" />
+      {/* Display Error if fetching failed */}
+       {fetchError && (
+          <Alert variant="destructive" className="mb-6">
+             <AlertTriangle className="h-4 w-4" />
+             <AlertTitle>Error Loading Shipments</AlertTitle>
+             <AlertDescription>
+               {fetchError}
+               {fetchError.includes("initialization failed") && (
+                 <span className="block mt-2 text-xs">
+                   Please verify your Firebase setup in `.env.local` and restart the application.
+                 </span>
+               )}
+             </AlertDescription>
+           </Alert>
+       )}
+
+
+       {/* Filters and Search Section - Keep placeholders */}
+        <Card className="p-4 md:p-6 shadow-sm">
+         <div className="flex flex-col md:flex-row gap-4 items-center">
+           <div className="relative flex-grow w-full md:w-auto">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+             <Input placeholder="Search by Shipment ID, Order ID, or Tracking..." className="pl-10" />
+           </div>
+           <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+               <Select>
+                 <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
+                   <SelectValue placeholder="Filter by Status" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="all">All Statuses</SelectItem>
+                    {ShipmentSchema.shape.status.options.map(status => (
+                        <SelectItem key={status} value={status.toLowerCase()}>{status}</SelectItem>
+                    ))}
+                 </SelectContent>
+               </Select>
+               <Select>
+                 <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
+                   <SelectValue placeholder="Filter by Carrier" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="all">All Carriers</SelectItem>
+                   {/* Dynamically populate carriers if needed, or keep static */}
+                   <SelectItem value="fastfreight">FastFreight</SelectItem>
+                   <SelectItem value="quickship">QuickShip</SelectItem>
+                   <SelectItem value="reliabletrans">ReliableTrans</SelectItem>
+                 </SelectContent>
+               </Select>
+           </div>
          </div>
-         <Select>
-           <SelectTrigger className="w-full md:w-[180px]">
-              <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
-             <SelectValue placeholder="Filter by Status" />
-           </SelectTrigger>
-           <SelectContent>
-             <SelectItem value="all">All Statuses</SelectItem>
-             <SelectItem value="label created">Label Created</SelectItem>
-             <SelectItem value="in transit">In Transit</SelectItem>
-             <SelectItem value="out for delivery">Out for Delivery</SelectItem>
-             <SelectItem value="delivered">Delivered</SelectItem>
-             <SelectItem value="exception">Exception</SelectItem>
-           </SelectContent>
-         </Select>
-         <Select>
-           <SelectTrigger className="w-full md:w-[180px]">
-              <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
-             <SelectValue placeholder="Filter by Carrier" />
-           </SelectTrigger>
-           <SelectContent>
-             <SelectItem value="all">All Carriers</SelectItem>
-             <SelectItem value="fastfreight">FastFreight</SelectItem>
-             <SelectItem value="quickship">QuickShip</SelectItem>
-             <SelectItem value="reliabletrans">ReliableTrans</SelectItem>
-             {/* Add more carriers */}
-           </SelectContent>
-         </Select>
-       </div>
+        </Card>
 
       {/* Shipments Table */}
-       <Card>
+      {!fetchError && (
+       <Card className="shadow-md">
          <CardHeader>
            <CardTitle>Shipment Tracking</CardTitle>
            <CardDescription>Monitor incoming and outgoing shipments.</CardDescription>
@@ -110,16 +190,26 @@ export default function LogisticsPage() {
              <TableBody>
                {shipments.map((shipment) => (
                  <TableRow key={shipment.id}>
-                   <TableCell className="font-medium">{shipment.id}</TableCell>
-                   <TableCell>{shipment.orderId}</TableCell>
+                   <TableCell className="font-medium">
+                     <Link href={`/logistics/${shipment.id}`} className="text-primary hover:underline">
+                        {shipment.id.substring(0, 8)}... {/* Shorten ID */}
+                     </Link>
+                    </TableCell>
+                   <TableCell>
+                      <Link href={`/orders/${shipment.orderId}`} className="text-primary hover:underline">
+                         {shipment.orderId.substring(0, 8)}... {/* Shorten ID */}
+                       </Link>
+                    </TableCell>
                    <TableCell>{shipment.carrier}</TableCell>
                    <TableCell>
-                      <a href="#" className="text-primary hover:underline" title="Track package (external link placeholder)">
-                         {shipment.trackingNumber} <Navigation className="inline h-3 w-3 ml-1" />
-                      </a>
+                       {/* Add actual tracking link later */}
+                      <span title={shipment.trackingNumber} className="flex items-center gap-1">
+                         {shipment.trackingNumber.substring(0, 10)}...
+                          <Navigation className="inline h-3 w-3 ml-1 text-muted-foreground" />
+                      </span>
                     </TableCell>
-                    <TableCell>{shipment.destination}</TableCell>
-                    <TableCell>{shipment.estimatedDelivery}</TableCell>
+                    <TableCell className="truncate max-w-xs" title={shipment.destination}>{shipment.destination}</TableCell>
+                    <TableCell>{shipment.estimatedDelivery ? format(new Date(shipment.estimatedDelivery), 'PP') : 'N/A'}</TableCell>
                    <TableCell className="text-center">
                      <Badge variant={getShipmentStatusVariant(shipment.status)}>{shipment.status}</Badge>
                    </TableCell>
@@ -133,11 +223,13 @@ export default function LogisticsPage() {
                        </DropdownMenuTrigger>
                        <DropdownMenuContent align="end">
                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                         <DropdownMenuItem>View Details</DropdownMenuItem>
-                         <DropdownMenuItem>Update Status</DropdownMenuItem>
-                         <DropdownMenuItem>Print Label</DropdownMenuItem>
+                         <DropdownMenuItem asChild>
+                            <Link href={`/logistics/${shipment.id}`}>View Details</Link>
+                        </DropdownMenuItem>
+                         <DropdownMenuItem disabled>Update Status (soon)</DropdownMenuItem>
+                         <DropdownMenuItem disabled>Print Label (soon)</DropdownMenuItem>
                          <DropdownMenuSeparator />
-                          <DropdownMenuItem>Track Package</DropdownMenuItem>
+                          <DropdownMenuItem disabled>Track Package (soon)</DropdownMenuItem>
                        </DropdownMenuContent>
                      </DropdownMenu>
                    </TableCell>
@@ -147,25 +239,29 @@ export default function LogisticsPage() {
            </Table>
          </CardContent>
        </Card>
+      )}
 
         {/* Placeholder for when no shipments match filter/search */}
-       {shipments.length === 0 && (
-         <div className="text-center py-12 text-muted-foreground mt-8">
-           <Truck className="mx-auto h-12 w-12 mb-4" />
-           <p>No shipments found matching your criteria.</p>
-         </div>
+       {!fetchError && shipments.length === 0 && (
+         <Card className="col-span-full shadow-sm">
+            <div className="text-center py-16 text-muted-foreground">
+              <Truck className="mx-auto h-16 w-16 mb-4" />
+              <p className="text-lg font-medium">No shipments found.</p>
+              <p className="text-sm mt-2">Shipments will appear here once created.</p>
+            </div>
+         </Card>
        )}
 
       {/* Potential Future Section: Delivery Schedule */}
-      {/* <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>Upcoming Deliveries</CardTitle>
-            <CardDescription>View scheduled customer deliveries.</CardDescription>
-          </CardHeader>
-          <CardContent>
-             <p className="text-muted-foreground">Delivery schedule will appear here.</p>
-          </CardContent>
-        </Card> */}
+      {/* <Card className="mt-8"> ... </Card> */}
     </div>
   );
 }
+
+export const metadata = {
+  title: 'Logistics | Showroom Manager',
+  description: 'Track and manage shipments.',
+};
+
+// Ensure dynamic rendering because data is fetched on each request
+export const dynamic = 'force-dynamic';

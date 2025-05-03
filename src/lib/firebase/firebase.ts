@@ -1,6 +1,22 @@
 // src/lib/firebase/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, getDoc, addDoc, deleteDoc, Timestamp, type Firestore } from 'firebase/firestore'; // Added deleteDoc and Timestamp import
+import {
+    getFirestore,
+    collection,
+    getDocs,
+    doc,
+    getDoc,
+    addDoc,
+    deleteDoc,
+    Timestamp,
+    query, // Import query
+    orderBy, // Import orderBy
+    serverTimestamp, // Import serverTimestamp for actions
+    updateDoc, // Import updateDoc for actions
+    arrayUnion, // Import arrayUnion for actions
+    where, // Import where for actions
+    type Firestore
+} from 'firebase/firestore';
 // Import getAnalytics if needed, based on config
 // import { getAnalytics } from "firebase/analytics";
 import { firebaseConfig, isFirebaseConfigValid } from './config';
@@ -58,4 +74,18 @@ if (app) {
 export { app, db };
 // Export commonly used Firestore functions for convenience
 // Also export Timestamp type for checking instance type
-export { collection, getDocs, doc, getDoc, addDoc, deleteDoc, Timestamp };
+export {
+    collection,
+    getDocs,
+    doc,
+    getDoc,
+    addDoc,
+    deleteDoc,
+    Timestamp,
+    query, // Export query
+    orderBy, // Export orderBy
+    serverTimestamp, // Export serverTimestamp
+    updateDoc, // Export updateDoc
+    arrayUnion, // Export arrayUnion
+    where, // Export where
+};
