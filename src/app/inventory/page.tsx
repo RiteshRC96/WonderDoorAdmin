@@ -1,10 +1,12 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Filter, Search, Box } from "lucide-react";
+import { PlusCircle, Filter, Search, Box, Info } from "lucide-react";
 import Image from 'next/image';
 import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 
 // --- IMPORTANT NOTE ---
 // This inventoryItems array is static placeholder data.
@@ -23,7 +25,13 @@ const inventoryItems = [
   // Removed static placeholder: { id: "ITEM-XYZ123", name: "Newly Added Item", style: "Test Style", material: "Test Material", dimensions: "1x1", stock: 10, price: 99.99, image: "https://picsum.photos/300/200", hint: "test item" },
 ];
 
-export default function InventoryPage() {
+interface InventoryPageProps {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+export default function InventoryPage({ searchParams }: InventoryPageProps) {
+  const showSimulatedAddAlert = searchParams?.simulated_add === 'true';
+
   return (
     <div className="container mx-auto py-6 animate-subtle-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -34,6 +42,18 @@ export default function InventoryPage() {
           </Link>
         </Button>
       </div>
+
+      {/* Alert for Simulated Addition */}
+      {showSimulatedAddAlert && (
+         <Alert className="mb-6">
+            <Info className="h-4 w-4" />
+           <AlertTitle>Item Addition Simulated</AlertTitle>
+           <AlertDescription>
+              The item addition was simulated successfully, but it won't appear in the list below. This application uses a static list for demonstration purposes and does not have a database connected to store new items permanently. In a real application, the new item would be saved and displayed here.
+           </AlertDescription>
+         </Alert>
+      )}
+
 
       {/* Filters and Search */}
       <div className="mb-6 flex flex-col md:flex-row gap-4">

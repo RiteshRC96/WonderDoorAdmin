@@ -1,9 +1,9 @@
+
 "use client";
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import type { FieldElement } from "react-hook-form"; // Import FieldElement type
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -55,14 +55,13 @@ export function AddItemForm() {
 
       if (result.success) {
         toast({
-          title: "Success!",
+          title: "Simulation Success!",
           description: result.message,
         });
-        // Redirect to the main inventory page after successful submission
+        // Redirect to the main inventory page with a query param to show the explanation alert
         // Note: The new item won't appear because the inventory list is static.
-        router.push('/inventory');
-        // Optionally clear the form after success
-        // form.reset();
+        router.push('/inventory?simulated_add=true');
+        // Do not reset the form here, let the redirect happen.
 
       } else {
         // Handle validation errors returned from the server action
@@ -115,7 +114,11 @@ export function AddItemForm() {
          description: "An unexpected error occurred. Please try again.",
        });
     } finally {
-       setIsSubmitting(false);
+       // Only set submitting false if there was an error, success navigates away
+       // This prevents a state update on an unmounted component if navigation is fast.
+       if (!form.formState.isSubmitSuccessful) {
+         setIsSubmitting(false);
+       }
     }
   }
 
