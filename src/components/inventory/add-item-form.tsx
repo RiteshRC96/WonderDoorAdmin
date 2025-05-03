@@ -3,6 +3,7 @@
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import type { FieldElement } from "react-hook-form"; // Import FieldElement type
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 
@@ -36,7 +37,7 @@ export function AddItemForm() {
       material: "",
       dimensions: "",
       stock: 0,
-      price: 0,
+      price: 0, // Ensure default price is a number
       description: "",
       sku: "",
       weight: "",
@@ -49,6 +50,7 @@ export function AddItemForm() {
   async function onSubmit(values: AddItemInput) {
     setIsSubmitting(true);
     try {
+      // The action now expects imageUrl to be string | undefined
       const result = await addItemAction(values);
 
       if (result.success) {
@@ -57,30 +59,61 @@ export function AddItemForm() {
           description: result.message,
         });
         // Redirect to the main inventory page after successful submission
+        // Note: The new item won't appear because the inventory list is static.
         router.push('/inventory');
-         // Optionally, redirect to the new item's detail page if ID is available
-         // if (result.itemId) {
-         //   router.push(`/inventory/${result.itemId}`);
-         // } else {
-         //   router.push('/inventory');
-         // }
+        // Optionally clear the form after success
+        // form.reset();
+
       } else {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: result.message || "Failed to add item.",
-        });
-         // Optionally display field-specific errors if provided by the action
-         if (result.errors) {
-           Object.entries(result.errors).forEach(([field, messages]) => {
-             if (messages && messages.length > 0) {
-               form.setError(field as keyof AddItemInput, {
-                 type: 'manual',
-                 message: messages[0], // Show the first error message for the field
-               });
+        // Handle validation errors returned from the server action
+        if (result.errors) {
+          let firstErrorField: keyof AddItemInput | null = null;
+          Object.entries(result.errors).forEach(([field, messages]) => {
+             // Ensure the field exists in the form before setting an error
+             if (field in form.getValues() && messages && messages.length > 0) {
+                form.setError(field as keyof AddItemInput, {
+                  type: 'manual',
+                  message: messages[0], // Show the first error message
+                });
+                if (!firstErrorField) {
+                   firstErrorField = field as keyof AddItemInput;
+                 }
+             } else {
+                 console.warn(`Received error for non-existent field: ${field}`);
              }
+          });
+            // Focus the first field with an error
+            if (firstErrorField) {
+                // Need to access the actual DOM element via ref if possible,
+                // otherwise rely on field name for focus (might not work perfectly depending on setup)
+                // For ShadCN/react-hook-form, direct focus might require refs on inputs or a helper.
+                 // Attempting direct focus (may need adjustment based on actual component refs)
+                 const fieldElement = form.control.getFieldState(firstErrorField).isDirty // Check if field state exists
+                 ? document.querySelector<FieldElement>(`[name="${firstErrorField}"]`)
+                 : null;
+
+                 // Wait for the next tick to ensure the DOM has updated with errors
+                 setTimeout(() => {
+                      const firstErrorElement = document.querySelector<HTMLElement>(`[aria-invalid="true"]`);
+                      if (firstErrorElement) {
+                          firstErrorElement.focus();
+                      }
+                 }, 0);
+            }
+          toast({
+             variant: "destructive",
+             title: "Validation Error",
+             description: result.message || "Please check the form fields.",
            });
-         }
+
+        } else {
+           // General failure message
+           toast({
+             variant: "destructive",
+             title: "Error",
+             description: result.message || "Failed to add item. Please try again.",
+           });
+        }
       }
     } catch (error) {
        console.error("Submission error:", error);
@@ -111,7 +144,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Item Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Modern Oak Door" {...field} />
+                      <Input placeholder="e.g., Modern Oak Door" {...field} aria-invalid={!!form.formState.errors.name} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -124,7 +157,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>SKU</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., MOD-OAK-3680" {...field} />
+                      <Input placeholder="e.g., MOD-OAK-3680" {...field} aria-invalid={!!form.formState.errors.sku} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -137,7 +170,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Style</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Modern, Classic" {...field} />
+                      <Input placeholder="e.g., Modern, Classic" {...field} aria-invalid={!!form.formState.errors.style} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -150,7 +183,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Material</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Oak, Walnut, Fabric" {...field} />
+                      <Input placeholder="e.g., Oak, Walnut, Fabric" {...field} aria-invalid={!!form.formState.errors.material} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -163,7 +196,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Dimensions</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., 36x80 or 84x35x32" {...field} />
+                      <Input placeholder="e.g., 36x80 or 84x35x32" {...field} aria-invalid={!!form.formState.errors.dimensions} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -176,7 +209,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Weight (Optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., 55 lbs" {...field} />
+                      <Input placeholder="e.g., 55 lbs" {...field} aria-invalid={!!form.formState.errors.weight} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -189,7 +222,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Stock Quantity</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
+                      <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} aria-invalid={!!form.formState.errors.stock}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -202,7 +235,7 @@ export function AddItemForm() {
                   <FormItem>
                     <FormLabel>Price ($)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      <Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} aria-invalid={!!form.formState.errors.price}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -215,7 +248,7 @@ export function AddItemForm() {
                    <FormItem>
                      <FormLabel>Lead Time (Optional)</FormLabel>
                      <FormControl>
-                       <Input placeholder="e.g., 2 weeks" {...field} />
+                       <Input placeholder="e.g., 2 weeks" {...field} aria-invalid={!!form.formState.errors.leadTime} />
                      </FormControl>
                      <FormMessage />
                    </FormItem>
@@ -228,7 +261,7 @@ export function AddItemForm() {
                    <FormItem>
                      <FormLabel>Image URL (Optional)</FormLabel>
                      <FormControl>
-                       <Input type="url" placeholder="https://..." {...field} />
+                       <Input type="url" placeholder="https://..." {...field} aria-invalid={!!form.formState.errors.imageUrl} />
                      </FormControl>
                      <FormDescription>Enter the full URL of the product image.</FormDescription>
                      <FormMessage />
@@ -242,7 +275,7 @@ export function AddItemForm() {
                    <FormItem className="md:col-span-2">
                      <FormLabel>Image Hint (Optional)</FormLabel>
                      <FormControl>
-                       <Input placeholder="e.g., wood door" {...field} />
+                       <Input placeholder="e.g., wood door" {...field} aria-invalid={!!form.formState.errors.imageHint} />
                      </FormControl>
                       <FormDescription>Keywords for AI image search (if URL not provided).</FormDescription>
                      <FormMessage />
@@ -261,6 +294,7 @@ export function AddItemForm() {
                         placeholder="Provide a brief description of the item..."
                         className="resize-y min-h-[100px]"
                         {...field}
+                        aria-invalid={!!form.formState.errors.description}
                       />
                     </FormControl>
                     <FormMessage />
