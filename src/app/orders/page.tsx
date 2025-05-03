@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/firebase/firebase'; // Import Firestore functions
 import type { Order } from '@/schemas/order'; // Import the Order type
+import { OrderSchema } from '@/schemas/order'; // Import OrderSchema
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 import { format } from 'date-fns'; // For formatting dates
