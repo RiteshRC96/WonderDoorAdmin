@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
@@ -50,6 +51,12 @@ const nextConfig = {
        {
          protocol: 'https',
          hostname: 'www.doors.com', // Add doors.com hostname
+         port: '',
+         pathname: '/**',
+       },
+       {
+         protocol: 'https',
+         hostname: 'tiimg.tistatic.com', // Add tiimg.tistatic.com hostname
          port: '',
          pathname: '/**',
        }
