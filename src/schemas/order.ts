@@ -1,9 +1,14 @@
 import { z } from 'zod';
 
+// Define possible statuses
+const OrderStatusEnum = z.enum(['Pending Payment', 'Processing', 'Shipped', 'Delivered', 'Cancelled', 'Refunded']);
+const PaymentStatusEnum = z.enum(['Pending', 'Paid', 'COD', 'Refunded', 'Failed']);
+
+
 // Schema for customer/shipping details based on Firestore's shippingInfo
 const ShippingInfoSchema = z.object({
   name: z.string().min(1, "Customer name is required."),
-  email: z.string().email("Invalid email address.").optional(),
+  email: z.string().email("Invalid email address.").optional().or(z.literal('')),
   phone: z.string().optional(), // Assuming phone might be added later or is optional
   address: z.string().min(1, "Shipping address is required."),
   city: z.string().min(1, "City is required."),
@@ -22,85 +27,85 @@ const ItemCustomizationsSchema = z.object({
 
 // Schema for an item within an order based on Firestore
 const OrderItemSchema = z.object({
-  cartItemId: z.string(), // Unique ID for the item in the cart/order context
-  doorId: z.string(), // Reference to the inventory item ID (assuming this maps to inventory)
-  name: z.string(), // Denormalized product name
-  sku: z.string(), // Denormalized product SKU
+  // Removed cartItemId as it seems redundant if items array index is used
+  // cartItemId: z.string(), // Unique ID for the item in the cart/order context
+  itemId: z.string().min(1, "Product must be selected."), // Reference to the inventory item ID
+  name: z.string(), // Denormalized product name (set when item is selected)
+  sku: z.string(), // Denormalized product SKU (set when item is selected)
   quantity: z.coerce.number().int().min(1, "Quantity must be at least 1."),
-  finalPrice: z.coerce.number().min(0, "Price cannot be negative."), // Price per unit at the time of order
-  imageUrl: z.string().url("Invalid image URL.").optional().or(z.literal('')), // Denormalized product image URL
+  price: z.coerce.number().min(0, "Price cannot be negative."), // Price per unit at the time of order (set when item is selected)
+  image: z.string().url("Invalid image URL.").optional().or(z.literal('')), // Denormalized product image URL (set when item is selected)
   customizations: ItemCustomizationsSchema.optional(), // Optional customizations
 });
 
 // Schema for payment info based on Firestore
 const PaymentInfoSchema = z.object({
-    paymentMethod: z.string().min(1, "Payment method required."), // e.g., "cod", "card"
+    paymentMethod: PaymentStatusEnum, // Use enum
     // Add other payment details if needed (e.g., transaction ID)
 });
 
 // Schema for tracking info based on Firestore
 const TrackingInfoSchema = z.object({
     carrier: z.string().optional(),
-    status: z.string().optional(), // Shipment status
+    status: z.string().optional(), // Shipment status (can be different from main order status)
     trackingNumber: z.string().optional(),
 });
 
 // --- Main Order Schema reflecting Firestore structure ---
-// Note: This schema is primarily for reading/displaying data based on the provided structure.
-// Creating/Updating might need adjustments or separate schemas if the input differs significantly.
+// This schema is used for validating the INPUT data for creating/updating orders.
 export const OrderSchema = z.object({
   // Map Firestore fields to schema fields
-  shippingInfo: ShippingInfoSchema,
+  customer: ShippingInfoSchema, // Use ShippingInfoSchema directly for customer input
   items: z.array(OrderItemSchema).min(1, "Order must contain at least one item."),
-  status: z.string(), // Main order status (e.g., "Pending Payment", "Processing", "Shipped")
-  paymentInfo: PaymentInfoSchema,
-  trackingInfo: TrackingInfoSchema.optional(), // Tracking info might not exist initially
-  userId: z.string(), // User who placed the order
-  // orderDate: handled by Order interface using string representation
-  // totalAmount: handled by Order interface
+  status: OrderStatusEnum, // Use enum for main order status
+  paymentStatus: PaymentStatusEnum, // Use enum for payment status - might overlap with main status logic
+  shippingMethod: z.string().optional().or(z.literal('')),
 
-  // --- Fields from previous schema (might need mapping or removal) ---
-  // customer: Merged into shippingInfo
-  // paymentStatus: Possibly derived from paymentInfo.paymentMethod or top-level status? Assuming top-level 'status' covers this for now.
-  // shippingMethod: Not present in Firestore example, maybe derived from trackingInfo.carrier? Marked optional.
-  shippingMethod: z.string().optional(),
+  // Fields below are part of the Order interface for reading data, not typically part of the core input validation schema
+  // paymentInfo: PaymentInfoSchema, // Handled separately or derived? Let's keep paymentStatus for input
+  // trackingInfo: TrackingInfoSchema.optional(), // Usually added after creation
+  // userId: z.string(), // Usually added server-side based on authentication
 });
 
-// Type for validating input if needed (might differ from Firestore structure)
-// For now, mirroring OrderSchema for consistency, but might need refinement for creation/update forms.
+// Type for validating input FORM data
 export type OrderInput = z.infer<typeof OrderSchema>;
+
 
 // Define the structure of an Order document READ FROM Firestore
 export interface Order {
   id: string; // Firestore document ID
-  items: z.infer<typeof OrderItemSchema>[];
+  items: z.infer<typeof OrderItemSchema>[]; // Use mapped items
   orderDate: string; // ISO string representation of Firestore Timestamp
-  paymentInfo: z.infer<typeof PaymentInfoSchema>;
+  paymentInfo: { paymentMethod: string }; // Reflects actual DB structure (string)
   shippingInfo: z.infer<typeof ShippingInfoSchema>;
-  status: string; // Main order status from Firestore
+  status: string; // Main order status from Firestore (string)
   totalAmount: number; // Total order amount from Firestore
   trackingInfo?: z.infer<typeof TrackingInfoSchema>; // Optional tracking info
   userId: string;
-  // Potentially add calculated fields or fields mapped from previous structure if needed by UI
-  // For example, mapping Firestore's 'status' to the old enum might be needed temporarily
-  // or calculating derived statuses.
-  createdAt?: string; // Keep original field if needed by other parts, map from orderDate
-  updatedAt?: string; // Optional, if exists in Firestore
-  shipmentId?: string; // Maybe derived from trackingInfo.trackingNumber or a separate field?
-  // Map 'customer' for compatibility if needed by UI components expecting it
-  customer?: {
+
+  // Compatibility mappings for potential UI use
+  createdAt?: string;
+  updatedAt?: string;
+  shipmentId?: string;
+  customer: { // Use DB structure directly
       name: string;
       email?: string;
       phone?: string;
       address: string;
+      // Add city, state, zip if needed by UI directly
+      city?: string;
+      state?: string;
+      zipCode?: string;
   };
-  // Map old 'total' if needed
-  total?: number;
-  // Map old status/paymentStatus if needed
-  paymentStatus?: string;
+  total?: number; // Map from totalAmount
+  paymentStatus: string; // Map from paymentInfo.paymentMethod or status
+  shippingMethod?: string; // Map from trackingInfo.carrier or separate field?
 }
 
 // Schema/Type for creating an order might need to be different,
 // depending on what data is expected from the creation form.
-// For now, let's assume CreateOrderInput is similar to OrderInput.
+// Use OrderInput for form validation.
 export interface CreateOrderInput extends OrderInput {}
+
+// Export enums for use in components
+export { OrderStatusEnum, PaymentStatusEnum };

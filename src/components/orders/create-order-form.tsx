@@ -21,8 +21,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { createOrderAction } from "@/app/orders/actions";
-import { OrderSchema, type CreateOrderInput, type OrderInput } from "@/schemas/order";
-// AddItemInput still used for inventory selection type, imageHint removed there too implicitly
+// Import the enums along with the types/schema
+import { OrderSchema, type CreateOrderInput, type OrderInput, OrderStatusEnum, PaymentStatusEnum } from "@/schemas/order";
 import type { AddItemInput } from '@/schemas/inventory';
 import { Loader2, PlusCircle, Trash2, DollarSign, AlertTriangle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
@@ -30,7 +30,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Define the structure of an inventory item passed for selection
-// AddItemInput from schema already excludes imageHint
 interface InventorySelectItem extends AddItemInput {
   id: string;
   createdAt?: string;
@@ -60,11 +59,13 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
         email: "",
         phone: "",
         address: "",
+        city: "",
+        state: "",
+        zipCode: "",
       },
-      // Initialize items array according to OrderItemSchema (which now excludes imageHint)
       items: [{ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "" }],
-      status: "Processing", // Default status
-      paymentStatus: "Pending", // Default payment status
+      status: "Processing", // Default status from enum
+      paymentStatus: "Pending", // Default payment status from enum
       shippingMethod: "",
     },
   });
@@ -97,7 +98,6 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
       form.setValue(`items.${index}.price`, selectedItem.price || 0);
       form.trigger(`items.${index}.price`);
       form.setValue(`items.${index}.image`, selectedItem.imageUrl || '');
-      // Removed imageHint setValue
       setSelectedItemDetails(prev => ({ ...prev, [index]: selectedItem }));
     } else {
        form.setValue(`items.${index}.name`, '');
@@ -105,9 +105,10 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
        form.setValue(`items.${index}.price`, 0);
        form.trigger(`items.${index}.price`);
        form.setValue(`items.${index}.image`, '');
-       // Removed imageHint setValue
       setSelectedItemDetails(prev => ({ ...prev, [index]: null }));
     }
+     // Trigger validation for the item ID field after selection
+     form.trigger(`items.${index}.itemId`);
   };
 
   async function onSubmit(values: CreateOrderInput) {
@@ -133,30 +134,52 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
           description: result.message,
         });
         router.push(`/orders/${result.orderId}`); // Redirect to the newly created order's detail page
-        // Form reset is not strictly necessary due to redirect
 
       } else {
         if (result.errors) {
            let firstErrorField: keyof OrderInput | string | null = null;
-           if (result.errors.customer) {
-               firstErrorField = `customer.${Object.keys(result.errors.customer)[0]}` as keyof OrderInput;
-           } else if (result.errors.items) {
-               const itemErrorIndex = Object.keys(result.errors.items)[0];
-                if (itemErrorIndex && result.errors.items[itemErrorIndex as any]) {
-                  const fieldError = Object.keys(result.errors.items[itemErrorIndex as any])[0];
-                  firstErrorField = `items.${itemErrorIndex}.${fieldError}`;
+           // Improved error mapping logic
+            Object.entries(result.errors).forEach(([key, value]) => {
+                if (key === 'customer' && typeof value === 'object' && value !== null) {
+                    const customerErrorKey = Object.keys(value)[0];
+                    if (customerErrorKey) firstErrorField = `customer.${customerErrorKey}`;
+                    Object.entries(value).forEach(([field, messages]: [string, any]) => {
+                        form.setError(`customer.${field as keyof CreateOrderInput['customer']}`, { message: messages?.[0] });
+                    });
+                } else if (key === 'items' && Array.isArray(value)) {
+                    value.forEach((itemErrors, index) => {
+                        if (typeof itemErrors === 'object' && itemErrors !== null) {
+                            const itemErrorKey = Object.keys(itemErrors)[0];
+                             if (itemErrorKey && !firstErrorField) firstErrorField = `items.${index}.${itemErrorKey}`;
+                            Object.entries(itemErrors).forEach(([field, messages]: [string, any]) => {
+                                form.setError(`items.${index}.${field as keyof CreateOrderInput['items'][0]}`, { message: messages?.[0] });
+                            });
+                        }
+                    });
+                } else if (typeof value === 'object' && value !== null && '_errors' in value) {
+                    // Handle top-level schema errors
+                    form.setError(key as keyof CreateOrderInput, { message: (value as any)._errors?.[0] });
+                    if (!firstErrorField) firstErrorField = key;
+                } else if (typeof value === 'string') { // Handle direct string errors for fields
+                     form.setError(key as keyof CreateOrderInput, { message: value });
+                     if (!firstErrorField) firstErrorField = key;
                 }
-           }
+            });
+
 
            if (firstErrorField) {
              try {
-                 form.setError(firstErrorField.split('.')[0] as any, { message: 'Check fields' });
+                 // Focus logic might need refinement depending on field structure
+                 const fieldName = firstErrorField.includes('.') ? firstErrorField : firstErrorField;
+                 // form.setFocus(fieldName as any); // This might fail for nested array fields
+                 // Fallback focus or general error display might be better
+                 console.log("Focusing attempt on:", fieldName);
                  setTimeout(() => {
                       const firstErrorElement = document.querySelector<HTMLElement>(`[aria-invalid="true"]`);
                       if (firstErrorElement) {
                           firstErrorElement.focus();
                       }
-                 }, 0);
+                 }, 100);
              } catch (e) { console.warn("Could not set focus on error field", e); }
            }
 
@@ -228,19 +251,19 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                         </FormItem>
                         )}
                      />
-                     <FormField
+                      <FormField
                         control={form.control}
                         name="customer.email"
                         render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Email (Optional)</FormLabel>
+                            <FormLabel>Email *</FormLabel>
                             <FormControl>
                             <Input type="email" placeholder="e.g., john.doe@example.com" {...field} aria-invalid={!!form.formState.errors.customer?.email} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                         )}
-                     />
+                      />
                      <FormField
                         control={form.control}
                         name="customer.phone"
@@ -254,19 +277,58 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                         </FormItem>
                         )}
                      />
-                     <FormField
+                      <FormField
                         control={form.control}
                         name="customer.address"
                         render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                            <FormLabel>Shipping Address *</FormLabel>
+                        <FormItem>
+                            <FormLabel>Address Line *</FormLabel>
                             <FormControl>
-                            <Textarea placeholder="e.g., 123 Main St, Anytown, USA 12345" {...field} aria-invalid={!!form.formState.errors.customer?.address}/>
+                            <Input placeholder="e.g., 123 Main St, Apt 4B" {...field} aria-invalid={!!form.formState.errors.customer?.address}/>
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                         )}
-                     />
+                      />
+                       <FormField
+                        control={form.control}
+                        name="customer.city"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>City *</FormLabel>
+                            <FormControl>
+                            <Input placeholder="e.g., Anytown" {...field} aria-invalid={!!form.formState.errors.customer?.city}/>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                      />
+                       <FormField
+                        control={form.control}
+                        name="customer.state"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>State *</FormLabel>
+                            <FormControl>
+                            <Input placeholder="e.g., CA" {...field} aria-invalid={!!form.formState.errors.customer?.state}/>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                      />
+                       <FormField
+                        control={form.control}
+                        name="customer.zipCode"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Zip Code *</FormLabel>
+                            <FormControl>
+                            <Input placeholder="e.g., 90210" {...field} aria-invalid={!!form.formState.errors.customer?.zipCode}/>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                      />
                  </div>
             </div>
 
@@ -278,7 +340,7 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => append({ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "" })} // Removed imageHint from append
+                        onClick={() => append({ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "" })}
                         disabled={isSubmitting}
                     >
                         <PlusCircle className="mr-2 h-4 w-4" /> Add Item
@@ -296,7 +358,6 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                 width={80}
                                 height={80}
                                 className="object-cover w-full h-full"
-                                // Use name/style as fallback for data-ai-hint
                                 data-ai-hint={selectedItemDetails[index]?.name || selectedItemDetails[index]?.style || 'product item'}
                               />
                             ) : (
@@ -311,7 +372,7 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                 name={`items.${index}.itemId`}
                                 render={({ field }) => (
                                 <FormItem className="sm:col-span-2 md:col-span-1">
-                                    <FormLabel>Product</FormLabel>
+                                    <FormLabel>Product *</FormLabel>
                                     <Select
                                         onValueChange={(value) => {
                                             field.onChange(value);
@@ -327,8 +388,8 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                     </FormControl>
                                     <SelectContent>
                                         {inventoryItems.length > 0 ? inventoryItems.map((item) => (
-                                        <SelectItem key={item.id} value={item.id}>
-                                            {item.name} ({item.sku}) - Stock: {item.stock}
+                                        <SelectItem key={item.id} value={item.id} disabled={item.stock <= 0}>
+                                            {item.name} ({item.sku}) - Stock: {item.stock <= 0 ? 'Out of Stock' : item.stock}
                                         </SelectItem>
                                         )) : <SelectItem value="no-items" disabled>No inventory items available</SelectItem>}
                                     </SelectContent>
@@ -343,17 +404,27 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                 name={`items.${index}.quantity`}
                                 render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Quantity</FormLabel>
+                                    <FormLabel>Quantity *</FormLabel>
                                     <FormControl>
                                     <Input
                                         type="number"
                                         min="1"
+                                        max={selectedItemDetails[index]?.stock ?? 1} // Set max based on stock
                                         {...field}
-                                        onChange={e => field.onChange(parseInt(e.target.value, 10) || 1)}
+                                        onChange={e => {
+                                            const maxStock = selectedItemDetails[index]?.stock ?? 1;
+                                            let value = parseInt(e.target.value, 10) || 1;
+                                            if (value > maxStock) value = maxStock; // Cap at max stock
+                                            if (value < 1) value = 1; // Ensure minimum 1
+                                            field.onChange(value);
+                                        }}
                                         aria-invalid={!!form.formState.errors.items?.[index]?.quantity}
-                                        disabled={isSubmitting}
+                                        disabled={isSubmitting || !selectedItemDetails[index] || selectedItemDetails[index]?.stock <= 0} // Disable if no item selected or out of stock
                                         />
                                     </FormControl>
+                                     {selectedItemDetails[index] && field.value > selectedItemDetails[index]!.stock && (
+                                        <p className="text-sm font-medium text-destructive">Cannot exceed available stock ({selectedItemDetails[index]!.stock}).</p>
+                                     )}
                                     <FormMessage />
                                 </FormItem>
                                 )}
@@ -415,7 +486,8 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                             name="status"
                             render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Order Status</FormLabel>
+                                <FormLabel>Order Status *</FormLabel>
+                                {/* Use enum values for Select */}
                                 <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                                 <FormControl>
                                     <SelectTrigger aria-invalid={!!form.formState.errors.status}>
@@ -423,8 +495,8 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    {OrderSchema.shape.status.options.map(status => (
-                                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                                    {OrderStatusEnum.options.map(status => (
+                                        <SelectItem key={status} value={status}>{status}</SelectItem>
                                     ))}
                                 </SelectContent>
                                 </Select>
@@ -437,7 +509,8 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                             name="paymentStatus"
                             render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Payment Status</FormLabel>
+                                <FormLabel>Payment Status *</FormLabel>
+                                {/* Use enum values for Select */}
                                 <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                                 <FormControl>
                                     <SelectTrigger aria-invalid={!!form.formState.errors.paymentStatus}>
@@ -445,9 +518,9 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                    {OrderSchema.shape.paymentStatus.options.map(status => (
-                                    <SelectItem key={status} value={status}>{status}</SelectItem>
-                                    ))}
+                                     {PaymentStatusEnum.options.map(status => (
+                                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                                     ))}
                                 </SelectContent>
                                 </Select>
                                 <FormMessage />
@@ -461,7 +534,7 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                             <FormItem>
                                 <FormLabel>Shipping Method (Optional)</FormLabel>
                                 <FormControl>
-                                <Input placeholder="e.g., Standard Ground" {...field} aria-invalid={!!form.formState.errors.shippingMethod} disabled={isSubmitting}/>
+                                <Input placeholder="e.g., Standard Ground" {...field} value={field.value ?? ''} aria-invalid={!!form.formState.errors.shippingMethod} disabled={isSubmitting}/>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -484,7 +557,7 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
               <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting || items.length === 0}>
+              <Button type="submit" disabled={isSubmitting || items.length === 0 || items.some(item => !item.itemId)}>
                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isSubmitting ? "Creating Order..." : "Create Order"}
               </Button>
