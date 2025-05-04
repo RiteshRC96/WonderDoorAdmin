@@ -10,81 +10,80 @@ body {
 
 @layer base {
   :root {
-    /* Light Theme - Lime Green (#D2F898), Near White (#FCFCFC), Dark Muted Greens (#4A5043, #3C493F) */
-    --background: 0 0% 99%; /* Near White (#FCFCFC) */
-    --background-gradient-end: 0 0% 97%; /* Slightly darker near white */
-    --foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
+    /* Light Theme - Orange */
+    --background: 0 0% 100%; /* White */
+    --background-gradient-end: 0 0% 97%; /* Slightly darker white */
+    --foreground: 240 10% 3.9%; /* Near Black */
     --card: 0 0% 100%; /* White */
-    --card-foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
+    --card-foreground: 240 10% 3.9%; /* Near Black */
     --popover: 0 0% 100%; /* White */
-    --popover-foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
-    --primary: 81 87% 78%; /* Light Lime Green (#D2F898) */
-    --primary-foreground: 81 87% 15%; /* Dark Green */
-    --secondary: 80 6% 90%; /* Light muted grey-green */
-    --secondary-foreground: 80 6% 27%; /* Dark Muted Green (#4A5043) */
-    --muted: 80 6% 90%; /* Same as secondary background */
-    --muted-foreground: 80 6% 40%; /* Slightly darker muted green-grey */
-    --accent: 81 90% 92%; /* Very Light Green */
-    --accent-foreground: 81 90% 20%; /* Dark Green */
-    --destructive: 0 80% 65%; /* Brighter Red */
-    --destructive-foreground: 0 0% 98%;
-    --border: 80 6% 88%; /* Light grey-green border */
-    --input: 80 6% 96%; /* Slightly off-white input, grey-green tint */
-    --ring: 81 87% 78%; /* Primary color for ring */
-    --chart-1: 81 87% 78%; /* Light Lime Green */
-    --chart-2: 80 6% 60%; /* Medium Grey/Green */
-    --chart-3: 81 60% 65%; /* Muted Green */
-    --chart-4: 80 6% 70%; /* Lighter Grey/Green */
-    --chart-5: 81 70% 85%; /* Pale Green */
+    --popover-foreground: 240 10% 3.9%; /* Near Black */
+    --primary: 24 95% 53%; /* Orange */
+    --primary-foreground: 0 0% 100%; /* White */
+    --secondary: 240 4.8% 95.9%; /* Light Gray */
+    --secondary-foreground: 240 5.9% 10%; /* Near Black */
+    --muted: 240 4.8% 95.9%; /* Light Gray */
+    --muted-foreground: 240 3.8% 46.1%; /* Medium Gray */
+    --accent: 240 4.8% 95.9%; /* Light Gray */
+    --accent-foreground: 240 5.9% 10%; /* Near Black */
+    --destructive: 0 84.2% 60.2%; /* Red */
+    --destructive-foreground: 0 0% 98%; /* Near White */
+    --border: 240 5.9% 90%; /* Gray Border */
+    --input: 240 5.9% 90%; /* Gray Input */
+    --ring: 24 95% 53%; /* Orange Ring */
+    --chart-1: 24 95% 53%; /* Orange */
+    --chart-2: 120 50% 60%; /* Green */
+    --chart-3: 220 70% 65%; /* Blue */
+    --chart-4: 300 60% 70%; /* Purple */
+    --chart-5: 50 80% 60%; /* Yellow */
     --radius: 0.5rem;
-    /* Sidebar colors adjusted for new theme */
+    /* Sidebar colors adjusted */
     --sidebar-background: 0 0% 98%; /* Slightly Off-white */
-    --sidebar-foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
-    --sidebar-primary: 81 87% 78%; /* Light Lime Green (#D2F898) */
-    --sidebar-primary-foreground: 81 87% 15%; /* Dark Green */
-    --sidebar-accent: 81 90% 94%; /* Very Light Lime Accent */
-    --sidebar-accent-foreground: 81 90% 20%; /* Darker Green */
-    --sidebar-border: 80 6% 90%; /* Light grey-green border */
-    --sidebar-ring: 81 87% 78%; /* Light Lime Green */
+    --sidebar-foreground: 240 10% 3.9%; /* Near Black */
+    --sidebar-primary: 24 95% 53%; /* Orange */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 24 95% 90%; /* Light Orange */
+    --sidebar-accent-foreground: 24 95% 30%; /* Dark Orange */
+    --sidebar-border: 240 5.9% 90%; /* Gray Border */
+    --sidebar-ring: 24 95% 53%; /* Orange Ring */
   }
   .dark {
-    /* Dark Theme - Lime Green (#D2F898), Near White (#FCFCFC), Dark Muted Greens (#4A5043, #3C493F) */
-    --background: 94 7% 26%; /* Dark Muted Green (#3C493F) */
-    --background-gradient-end: 94 7% 22%; /* Slightly darker background */
-    --foreground: 0 0% 99%; /* Near White (#FCFCFC) */
-    --card: 80 6% 27%; /* Dark Muted Green (#4A5043) */
-    --card-foreground: 0 0% 99%; /* Near White (#FCFCFC) */
-    --popover: 94 7% 20%; /* Slightly darker than background */
-    --popover-foreground: 0 0% 99%; /* Near White (#FCFCFC) */
-    --primary: 81 87% 85%; /* Brighter Lime Green (Lighter version of #D2F898) */
-    --primary-foreground: 81 87% 10%; /* Very Dark Green */
-    --secondary: 80 6% 35%; /* Slightly lighter dark green/grey */
-    --secondary-foreground: 0 0% 90%; /* Lighter grey */
-    --muted: 80 6% 35%; /* Same as secondary background */
-    --muted-foreground: 0 0% 60%; /* Medium Grey */
-    --accent: 81 70% 60%; /* Darker Lime Green */
-    --accent-foreground: 81 70% 95%; /* Very Light Lime Green */
-    --destructive: 0 70% 55%; /* Vivid Red */
-    --destructive-foreground: 0 0% 98%;
-    --border: 80 6% 35%; /* Slightly lighter dark green/grey border */
-    --input: 80 6% 30%; /* Slightly darker than card */
-    --ring: 81 90% 88%; /* Brighter Lime Green Ring */
-    /* Chart colors adjusted for dark theme */
-    --chart-1: 81 87% 85%; /* Brighter Lime Green */
-    --chart-2: 80 15% 70%; /* Lighter Grey/Green */
-    --chart-3: 81 60% 75%; /* Brighter Muted Green */
-    --chart-4: 80 20% 80%; /* Very Light Grey/Green */
-    --chart-5: 81 70% 90%; /* Very Pale Green */
+    /* Dark Theme - Orange */
+    --background: 240 10% 3.9%; /* Near Black */
+    --background-gradient-end: 240 10% 6%; /* Slightly lighter black */
+    --foreground: 0 0% 98%; /* Near White */
+    --card: 240 10% 3.9%; /* Near Black */
+    --card-foreground: 0 0% 98%; /* Near White */
+    --popover: 240 10% 3.9%; /* Near Black */
+    --popover-foreground: 0 0% 98%; /* Near White */
+    --primary: 24 95% 60%; /* Brighter Orange */
+    --primary-foreground: 24 95% 10%; /* Very Dark Orange/Brown */
+    --secondary: 240 3.7% 15.9%; /* Dark Gray */
+    --secondary-foreground: 0 0% 98%; /* Near White */
+    --muted: 240 3.7% 15.9%; /* Dark Gray */
+    --muted-foreground: 240 5% 64.9%; /* Lighter Gray */
+    --accent: 240 3.7% 15.9%; /* Dark Gray */
+    --accent-foreground: 0 0% 98%; /* Near White */
+    --destructive: 0 72.2% 50.6%; /* Darker Red */
+    --destructive-foreground: 0 0% 98%; /* Near White */
+    --border: 240 3.7% 15.9%; /* Dark Gray Border */
+    --input: 240 3.7% 15.9%; /* Dark Gray Input */
+    --ring: 24 95% 60%; /* Brighter Orange Ring */
+    --chart-1: 24 95% 60%; /* Brighter Orange */
+    --chart-2: 120 50% 70%; /* Brighter Green */
+    --chart-3: 220 70% 75%; /* Brighter Blue */
+    --chart-4: 300 60% 80%; /* Brighter Purple */
+    --chart-5: 50 80% 70%; /* Brighter Yellow */
     --radius: 0.5rem;
     /* Dark Sidebar colors adjusted */
-    --sidebar-background: 94 7% 22%; /* Darker Muted Green */
+    --sidebar-background: 240 10% 6%; /* Slightly lighter black */
     --sidebar-foreground: 0 0% 98%; /* Near White */
-    --sidebar-primary: 81 87% 85%; /* Brighter Lime Green */
-    --sidebar-primary-foreground: 81 87% 10%; /* Very Dark Green */
-    --sidebar-accent: 81 15% 40%; /* Darker Lime Accent */
-    --sidebar-accent-foreground: 81 80% 90%; /* Lighter Lime Green */
-    --sidebar-border: 80 6% 38%; /* Slightly lighter dark green/grey border */
-    --sidebar-ring: 81 90% 88%; /* Brighter Lime Ring */
+    --sidebar-primary: 24 95% 60%; /* Brighter Orange */
+    --sidebar-primary-foreground: 24 95% 10%; /* Very Dark Orange/Brown */
+    --sidebar-accent: 24 20% 25%; /* Dark Orange Accent */
+    --sidebar-accent-foreground: 24 95% 70%; /* Light Orange */
+    --sidebar-border: 240 3.7% 15.9%; /* Dark Gray Border */
+    --sidebar-ring: 24 95% 60%; /* Brighter Orange Ring */
   }
 }
 
