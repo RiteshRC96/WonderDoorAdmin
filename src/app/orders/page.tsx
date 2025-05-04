@@ -1,11 +1,14 @@
 
+"use client"; // Make this a Client Component
+
+import * as React from 'react'; // Import React
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Filter, Search, Package, MoreHorizontal, AlertTriangle, PackageSearch } from "lucide-react"; // Added icons
+import { PlusCircle, Filter, Search, Package, MoreHorizontal, AlertTriangle, PackageSearch } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,14 +17,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/firebase/firebase'; // Import Firestore functions
-import type { Order } from '@/schemas/order'; // Import the Order type
-import { OrderSchema } from '@/schemas/order'; // Import OrderSchema
+import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/firebase/firebase';
+import type { Order } from '@/schemas/order';
+import { OrderSchema } from '@/schemas/order';
 import Link from 'next/link';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
-import { format } from 'date-fns'; // For formatting dates
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { format } from 'date-fns';
+import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton
 
-// Function to fetch orders from Firestore
+// Function to fetch orders from Firestore (can be called from client or server)
 async function getOrders(): Promise<{ orders: Order[]; error?: string }> {
   if (!db) {
     const errorMessage = "Firestore database is not initialized. Cannot fetch orders. Please check Firebase configuration.";
@@ -32,30 +36,20 @@ async function getOrders(): Promise<{ orders: Order[]; error?: string }> {
   try {
     console.log("Attempting to fetch orders from Firestore...");
     const ordersCollectionRef = collection(db, 'orders');
-    // Add ordering by creation date, newest first
     const q = query(ordersCollectionRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
 
     const orders: Order[] = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data() as Omit<Order, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
-
-      // Convert Timestamps to ISO strings for serialization
-      const createdAt = data.createdAt instanceof Timestamp
-        ? data.createdAt.toDate().toISOString()
-        : new Date().toISOString(); // Fallback, should ideally not happen
-       const updatedAt = data.updatedAt instanceof Timestamp
-         ? data.updatedAt.toDate().toISOString()
-         : undefined;
-
+      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+      const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
       orders.push({
         id: doc.id,
         ...data,
-        createdAt, // Serialized date string
-        updatedAt, // Serialized date string or undefined
-        // Ensure items array exists, even if empty (though schema enforces min 1)
+        createdAt,
+        updatedAt,
         items: data.items || [],
-        // Ensure total is a number, default to 0 if missing/invalid
         total: typeof data.total === 'number' ? data.total : 0,
       });
     });
@@ -63,51 +57,75 @@ async function getOrders(): Promise<{ orders: Order[]; error?: string }> {
     return { orders };
   } catch (error) {
      let errorMessage = `Error fetching orders from Firestore: ${error instanceof Error ? error.message : String(error)}`;
-       // Check for specific Firestore index error
-       if (error instanceof Error && error.message.toLowerCase().includes("index")) { // More robust check for index errors
+       if (error instanceof Error && error.message.toLowerCase().includes("index")) {
           errorMessage = "Firestore query failed: A required index is missing. Please create the index in the Firebase console (Firestore Database > Indexes) for the 'orders' collection, ordered by 'createdAt' descending.";
           console.warn(errorMessage);
         }
     console.error(errorMessage);
-    return { orders: [], error: errorMessage }; // Pass the potentially specific error message
+    return { orders: [], error: errorMessage };
   }
 }
 
-
 const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "destructive" => {
-   // Keep original variants for consistency
    switch (status?.toLowerCase()) {
     case 'processing':
-    case 'pending payment': // Added pending payment
-      return 'default'; // Using primary (gold)
+    case 'pending payment':
+      return 'default';
     case 'shipped':
-      return 'secondary'; // Using soft blue/green
+      return 'secondary';
     case 'delivered':
-      return 'outline'; // Simple outline for completed
-    case 'cancelled':
-    case 'failed': // Added failed payment
-      return 'destructive';
-    // Add payment statuses if needed, or handle separately
     case 'paid':
-        return 'outline'; // Example: Outline for paid
-    case 'pending': // Payment pending
-        return 'secondary'; // Example: Secondary for pending payment
+      return 'outline';
+    case 'cancelled':
+    case 'failed':
     case 'refunded':
-        return 'destructive'; // Example: Destructive for refunded
+      return 'destructive';
+    case 'pending': // Payment pending
+      return 'secondary';
     default:
       return 'secondary';
   }
 };
 
-export default async function OrdersPage() {
-  const { orders, error: fetchError } = await getOrders();
+export default function OrdersPage() {
+  const [orders, setOrders] = React.useState<Order[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [fetchError, setFetchError] = React.useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedStatus, setSelectedStatus] = React.useState("all");
+
+  // Fetch data on component mount
+  React.useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setFetchError(null);
+      const { orders: fetchedOrders, error } = await getOrders();
+      if (error) {
+        setFetchError(error);
+      } else {
+        setOrders(fetchedOrders);
+      }
+      setIsLoading(false);
+    };
+    fetchData();
+  }, []); // Empty dependency array ensures this runs once on mount
+
+  // Filter orders based on search and status
+  const filteredOrders = React.useMemo(() => {
+    return orders.filter(order => {
+      const matchesSearch = searchQuery === "" ||
+        order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = selectedStatus === "all" || order.status.toLowerCase() === selectedStatus.toLowerCase();
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, searchQuery, selectedStatus]);
 
   return (
-    <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8"> {/* Added spacing */}
+    <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-4xl font-bold text-foreground">Orders</h1>
         <Button asChild>
-            {/* Link to a future "create order" page */}
            <Link href="/orders/new">
              <PlusCircle className="mr-2 h-4 w-4" /> Create New Order
            </Link>
@@ -121,7 +139,6 @@ export default async function OrdersPage() {
              <AlertTitle>Error Loading Orders</AlertTitle>
              <AlertDescription>
                {fetchError}
-               {/* Specific guidance for common errors */}
                {fetchError.includes("initialization failed") && (
                  <span className="block mt-2 text-xs">
                    Please verify your Firebase setup in `.env.local` and restart the application.
@@ -136,16 +153,25 @@ export default async function OrdersPage() {
            </Alert>
        )}
 
-
-       {/* Filters and Search Section - Keep placeholders for now */}
+       {/* Filters and Search Section */}
        <Card className="p-4 md:p-6 shadow-sm">
           <div className="flex flex-col md:flex-row gap-4 items-center">
             <div className="relative flex-grow w-full md:w-auto">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search by Order ID or Customer Name..." className="pl-10" />
+              <Input
+                placeholder="Search by Order ID or Customer Name..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                disabled={isLoading}
+              />
             </div>
             <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-               <Select>
+               <Select
+                 value={selectedStatus}
+                 onValueChange={setSelectedStatus}
+                 disabled={isLoading}
+               >
                  <SelectTrigger className="w-full sm:w-[180px]">
                     <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
                    <SelectValue placeholder="Filter by Status" />
@@ -157,15 +183,48 @@ export default async function OrdersPage() {
                    ))}
                  </SelectContent>
                </Select>
-               {/* Potential Date Range Filter */}
-               {/* <Button variant="outline" disabled>Date Range</Button> */}
             </div>
           </div>
         </Card>
 
-
-      {/* Orders Table */}
-      {!fetchError && (
+      {/* Orders Table or Loading Skeletons */}
+      {isLoading ? (
+        <Card className="shadow-md">
+          <CardHeader>
+            <Skeleton className="h-6 w-1/4" />
+            <Skeleton className="h-4 w-1/2 mt-1" />
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                   {/* Define number of columns for skeleton */}
+                  <TableHead><Skeleton className="h-5 w-20" /></TableHead>
+                  <TableHead><Skeleton className="h-5 w-32" /></TableHead>
+                  <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+                  <TableHead className="text-right"><Skeleton className="h-5 w-20" /></TableHead>
+                  <TableHead className="text-center"><Skeleton className="h-5 w-16" /></TableHead>
+                  <TableHead className="text-center"><Skeleton className="h-5 w-24" /></TableHead>
+                  <TableHead><Skeleton className="h-5 w-8" /></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell className="text-center"><Skeleton className="h-5 w-16" /></TableCell>
+                    <TableCell className="text-center"><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : !fetchError && filteredOrders.length > 0 ? (
        <Card className="shadow-md">
          <CardHeader>
            <CardTitle>Order History</CardTitle>
@@ -187,15 +246,14 @@ export default async function OrdersPage() {
                </TableRow>
              </TableHeader>
              <TableBody>
-               {orders.map((order) => (
+               {filteredOrders.map((order) => (
                  <TableRow key={order.id}>
                    <TableCell className="font-medium">
                      <Link href={`/orders/${order.id}`} className="text-primary hover:underline">
-                         {order.id.substring(0, 8)}... {/* Shorten ID for display */}
+                         {order.id.substring(0, 8)}...
                       </Link>
                     </TableCell>
                    <TableCell>{order.customer.name}</TableCell>
-                   {/* Format date nicely */}
                     <TableCell>{format(new Date(order.createdAt), 'PP')}</TableCell>
                    <TableCell className="text-right">${order.total.toFixed(2)}</TableCell>
                     <TableCell className="text-center">{order.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
@@ -215,15 +273,17 @@ export default async function OrdersPage() {
                          <DropdownMenuItem asChild>
                             <Link href={`/orders/${order.id}`}>View Details</Link>
                         </DropdownMenuItem>
-                         <DropdownMenuItem disabled>Update Status (soon)</DropdownMenuItem>
-                          <DropdownMenuItem disabled>Edit Order (soon)</DropdownMenuItem>
+                         {/* Enable Edit when implemented */}
+                          <DropdownMenuItem asChild>
+                             <Link href={`/orders/${order.id}/edit`}>Edit Order</Link>
+                          </DropdownMenuItem>
                          <DropdownMenuSeparator />
                           {order.shipmentId && (
                              <DropdownMenuItem asChild>
                                  <Link href={`/logistics/${order.shipmentId}`}>View Shipment</Link>
                               </DropdownMenuItem>
                           )}
-                          {/* Add Cancel action using a client component later */}
+                          {/* Placeholder for Cancel action */}
                          <DropdownMenuItem className="text-destructive" disabled>Cancel Order (soon)</DropdownMenuItem>
                        </DropdownMenuContent>
                      </DropdownMenu>
@@ -234,26 +294,26 @@ export default async function OrdersPage() {
            </Table>
          </CardContent>
        </Card>
-       )}
-
-        {/* Placeholder for when no orders are found (and no error) */}
-       {!fetchError && orders.length === 0 && (
+       ) : !fetchError && filteredOrders.length === 0 ? (
          <Card className="col-span-full shadow-sm">
             <div className="text-center py-16 text-muted-foreground">
-              <PackageSearch className="mx-auto h-16 w-16 mb-4" /> {/* Changed Icon */}
-              <p className="text-lg font-medium">No orders found.</p>
-              <p className="text-sm mt-2">Create a new order to get started.</p>
+              <PackageSearch className="mx-auto h-16 w-16 mb-4" />
+              <p className="text-lg font-medium">No orders match your criteria.</p>
+              <p className="text-sm mt-2">
+                 {searchQuery || selectedStatus !== 'all'
+                   ? "Try adjusting your search or filters."
+                   : "Create a new order to get started."}
+              </p>
             </div>
          </Card>
-       )}
+       ) : null /* Don't show placeholder if there was a fetch error */}
     </div>
   );
 }
 
-export const metadata = {
-  title: 'Orders | Showroom Manager',
-  description: 'View and manage customer orders.',
-};
+// export const metadata = {
+//   title: 'Orders | Showroom Manager',
+//   description: 'View and manage customer orders.',
+// };
 
-// Ensure dynamic rendering because data is fetched on each request
-export const dynamic = 'force-dynamic';
+// export const dynamic = 'force-dynamic';
