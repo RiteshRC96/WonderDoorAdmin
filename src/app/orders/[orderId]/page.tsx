@@ -1,4 +1,5 @@
 
+
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -198,7 +199,8 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
              {/* Order Summary */}
              <div className="space-y-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2"><Hash className="h-5 w-5 text-muted-foreground" /> Order Summary</h3>
-                <p className="text-sm"><span className="text-muted-foreground">Payment Status:</span> <Badge variant={getStatusVariant(order.paymentStatus)}>{order.paymentStatus}</Badge></p>
+                 {/* Changed <p> to <div> to fix hydration error */}
+                <div className="text-sm"><span className="text-muted-foreground">Payment Status:</span> <Badge variant={getStatusVariant(order.paymentStatus)}>{order.paymentStatus}</Badge></div>
                  <p className="text-sm"><span className="text-muted-foreground">Shipping Method:</span> {order.shippingMethod || 'N/A'}</p>
                  {order.shipmentId ? (
                     <p className="text-sm"><span className="text-muted-foreground">Shipment:</span> <Link href={`/logistics/${order.shipmentId}`} className="text-primary hover:underline flex items-center gap-1"><Truck className="h-4 w-4"/>{order.shipmentId.substring(0,8)}...</Link></p>
@@ -284,3 +286,4 @@ export async function generateMetadata({ params }: { params: { orderId: string }
 
 // Ensure dynamic rendering because data is fetched on each request
 export const dynamic = 'force-dynamic';
+
