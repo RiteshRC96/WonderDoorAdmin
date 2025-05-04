@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -18,7 +17,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardDescription, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { updateOrderAction } from "@/app/orders/actions"; // Use update action
@@ -28,6 +26,7 @@ import type { AddItemInput } from '@/schemas/inventory';
 import { Loader2, PlusCircle, Trash2, DollarSign } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {z} from "zod";
 
 // Structure for inventory items used in selection dropdown
 interface InventorySelectItem extends AddItemInput {
@@ -38,10 +37,19 @@ interface InventorySelectItem extends AddItemInput {
   name: string; // Ensure required fields
   sku: string;
   stock: number;
+  price: number; // Add price to InventorySelectItem
 }
 
+// Define a type for the Order object with serializable dates (matching the Server Component)
+interface SerializableOrder extends Omit<Order, 'orderDate' | 'createdAt' | 'updatedAt'> {
+  orderDate: string; // ISO string
+  createdAt: string; // ISO string
+  updatedAt?: string; // ISO string or undefined
+}
+
+
 interface EditOrderFormProps {
-  order: Order; // Receive the full order data including ID and timestamps
+  order: SerializableOrder; // Expect the serializable order data
   inventoryItems: InventorySelectItem[];
 }
 
@@ -111,7 +119,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
       form.setValue(`items.${index}.itemId`, selectedItem.id);
       form.setValue(`items.${index}.name`, selectedItem.name);
       form.setValue(`items.${index}.sku`, selectedItem.sku);
-      form.setValue(`items.${index}.price`, selectedItem.price || 0);
+      form.setValue(`items.${index}.price`, selectedItem.price || 0); // Use price from selected inventory item
       form.trigger(`items.${index}.price`);
       form.setValue(`items.${index}.image`, selectedItem.imageUrl || '');
       setSelectedItemDetails(prev => ({ ...prev, [index]: selectedItem }));
