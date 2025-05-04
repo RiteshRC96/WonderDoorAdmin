@@ -109,7 +109,7 @@ export default async function OrdersPage() {
         <Button asChild>
             {/* Link to a future "create order" page */}
            <Link href="/orders/new">
-             <PlusCircle className="mr-2 h-4 w-4" /> Create New Order (soon)
+             <PlusCircle className="mr-2 h-4 w-4" /> Create New Order
            </Link>
          </Button>
       </div>
