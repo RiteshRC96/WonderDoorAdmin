@@ -10,81 +10,77 @@ body {
 
 @layer base {
   :root {
-    /* Light Theme - More Colorful with Gradient */
-    --background: 210 40% 98%; /* Very Light Blue - Start */
-    --background-gradient-end: 210 40% 96%; /* Slightly darker Light Blue - End */
+    /* Light Theme - Lime Green and White */
+    --background: 0 0% 99%; /* Near White (#FCFCFC) */
+    --background-gradient-end: 0 0% 97%; /* Slightly darker near white */
     --foreground: 210 15% 25%; /* Dark Blue Gray */
     --card: 0 0% 100%; /* White */
     --card-foreground: 210 15% 25%; /* Dark Blue Gray */
     --popover: 0 0% 100%; /* White */
     --popover-foreground: 210 15% 25%; /* Dark Blue Gray */
-    --primary: 250 65% 60%; /* Vibrant Violet */
-    --primary-foreground: 250 65% 98%; /* Light contrast for Violet */
-    --secondary: 160 70% 90%; /* Soft Teal */
-    --secondary-foreground: 160 70% 20%; /* Dark Teal */
-    --muted: 210 30% 94%; /* Lighter Blue Gray */
-    --muted-foreground: 210 15% 55%; /* Medium Blue Gray */
-    --accent: 30 90% 90%; /* Soft Orange */
-    --accent-foreground: 30 90% 25%; /* Dark Orange */
+    --primary: 81 87% 78%; /* Light Lime Green (#D2F898) */
+    --primary-foreground: 81 87% 15%; /* Dark Green */
+    --secondary: 210 10% 90%; /* Light Muted Grey */
+    --secondary-foreground: 210 10% 30%; /* Dark Muted Grey */
+    --accent: 81 90% 92%; /* Very Light Green */
+    --accent-foreground: 81 90% 20%; /* Dark Green */
     --destructive: 0 80% 65%; /* Brighter Red */
     --destructive-foreground: 0 0% 98%;
     --border: 210 20% 88%; /* Light Blue Gray Border */
-    --input: 210 30% 92%; /* Slightly darker input */
-    --ring: 250 70% 70%; /* Lighter Violet for ring */
-    --chart-1: 250 65% 60%; /* Violet */
-    --chart-2: 160 60% 50%; /* Teal */
-    --chart-3: 30 80% 60%; /* Orange */
-    --chart-4: 210 70% 65%; /* Medium Blue */
-    --chart-5: 340 80% 70%; /* Pink */
+    --input: 210 30% 96%; /* Slightly off-white input */
+    --ring: 81 87% 78%; /* Light Lime Green for ring */
+    --chart-1: 81 87% 78%; /* Light Lime Green */
+    --chart-2: 210 15% 60%; /* Medium Grey/Blue */
+    --chart-3: 81 60% 65%; /* Muted Green */
+    --chart-4: 210 20% 70%; /* Lighter Grey/Blue */
+    --chart-5: 81 70% 85%; /* Pale Green */
     --radius: 0.5rem;
-    /* Sidebar colors adjusted for colorful theme */
-    --sidebar-background: 220 15% 96%; /* Slightly Off-white */
-    --sidebar-foreground: 220 15% 30%; /* Darker Gray Blue */
-    --sidebar-primary: 250 65% 60%; /* Vibrant Violet */
-    --sidebar-primary-foreground: 250 65% 98%; /* Light contrast */
-    --sidebar-accent: 250 65% 94%; /* Very Light Violet Accent */
-    --sidebar-accent-foreground: 250 65% 30%; /* Darker Violet */
-    --sidebar-border: 220 15% 88%; /* Light Gray Blue Border */
-    --sidebar-ring: 250 70% 70%; /* Lighter Violet */
+    /* Sidebar colors adjusted for new theme */
+    --sidebar-background: 0 0% 98%; /* Slightly Off-white */
+    --sidebar-foreground: 210 15% 25%; /* Darker Gray Blue */
+    --sidebar-primary: 81 87% 78%; /* Light Lime Green */
+    --sidebar-primary-foreground: 81 87% 15%; /* Dark Green */
+    --sidebar-accent: 81 90% 94%; /* Very Light Lime Accent */
+    --sidebar-accent-foreground: 81 90% 20%; /* Darker Green */
+    --sidebar-border: 210 15% 90%; /* Light Gray Border */
+    --sidebar-ring: 81 87% 78%; /* Light Lime Green */
   }
   .dark {
-    /* Dark Theme - More Colorful with Gradient */
-    --background: 220 15% 10%; /* Very Dark Blue - Start */
-    --background-gradient-end: 220 15% 8%; /* Slightly darker Dark Blue - End */
-    --foreground: 210 20% 92%; /* Light Gray Blue */
-    --card: 220 15% 15%; /* Slightly Lighter Dark Blue */
-    --card-foreground: 210 20% 92%; /* Light Gray Blue */
-    --popover: 220 15% 13%; /* Darker Popover */
-    --popover-foreground: 210 20% 92%; /* Light Gray Blue */
-    --primary: 250 70% 70%; /* Lighter Violet */
-    --primary-foreground: 250 70% 10%; /* Dark contrast for Violet */
-    --secondary: 160 50% 30%; /* Dark Teal */
-    --secondary-foreground: 160 50% 85%; /* Light Teal */
-    --muted: 220 15% 25%; /* Medium Dark Blue */
-    --muted-foreground: 210 15% 65%; /* Lighter Gray Blue */
-    --accent: 30 70% 40%; /* Dark Orange */
-    --accent-foreground: 30 70% 90%; /* Light Orange */
+    /* Dark Theme - Dark Green/Grey and White Text */
+    --background: 80 10% 10%; /* Very Dark Desaturated Green/Grey */
+    --background-gradient-end: 80 10% 8%; /* Slightly darker background */
+    --foreground: 0 0% 99%; /* Near White (#FCFCFC) */
+    --card: 80 10% 15%; /* Slightly Lighter Dark Green/Grey */
+    --card-foreground: 0 0% 99%; /* Near White */
+    --popover: 80 10% 12%; /* Darker Popover */
+    --popover-foreground: 0 0% 99%; /* Near White */
+    --primary: 81 87% 85%; /* Brighter Lime Green */
+    --primary-foreground: 81 87% 10%; /* Very Dark Green */
+    --secondary: 80 8% 20%; /* Dark Muted Green/Grey */
+    --secondary-foreground: 80 8% 80%; /* Light Grey/Green */
+    --accent: 81 70% 60%; /* Darker Lime Green */
+    --accent-foreground: 81 70% 95%; /* Very Light Lime Green */
     --destructive: 0 70% 55%; /* Vivid Red */
     --destructive-foreground: 0 0% 98%;
-    --border: 210 15% 30%; /* Medium Dark Blue Border */
-    --input: 210 15% 25%; /* Medium Dark Blue Input */
-    --ring: 250 75% 75%; /* Brighter Violet Ring */
-    /* Chart colors adjusted for dark colorful theme */
-    --chart-1: 250 70% 70%; /* Lighter Violet */
-    --chart-2: 160 60% 60%; /* Lighter Teal */
-    --chart-3: 30 80% 65%; /* Lighter Orange */
-    --chart-4: 210 70% 70%; /* Lighter Medium Blue */
-    --chart-5: 340 80% 75%; /* Lighter Pink */
+    --border: 80 10% 25%; /* Medium Dark Green/Grey Border */
+    --input: 80 10% 20%; /* Medium Dark Green/Grey Input */
+    --ring: 81 90% 88%; /* Brighter Lime Green Ring */
+    /* Chart colors adjusted for dark theme */
+    --chart-1: 81 87% 85%; /* Brighter Lime Green */
+    --chart-2: 210 15% 70%; /* Lighter Grey/Blue */
+    --chart-3: 81 60% 75%; /* Brighter Muted Green */
+    --chart-4: 210 20% 80%; /* Very Light Grey/Blue */
+    --chart-5: 81 70% 90%; /* Very Pale Green */
     --radius: 0.5rem;
-    /* Dark Sidebar colors adjusted for colorful theme */
-    --sidebar-background: 220 15% 12%; /* Very Dark Blue */
-    --sidebar-foreground: 210 20% 90%; /* Light Gray Blue */
-    --sidebar-primary: 250 70% 70%; /* Lighter Violet */
-    --sidebar-primary-foreground: 250 70% 10%; /* Dark contrast */
-    --sidebar-accent: 250 15% 25%; /* Dark Violet Accent */
-    --sidebar-accent-foreground: 250 65% 85%; /* Lighter Violet */
-    --sidebar-border: 210 15% 28%; /* Medium Dark Blue Border */
-    --sidebar-ring: 250 75% 75%; /* Brighter Violet Ring */
+    /* Dark Sidebar colors adjusted */
+    --sidebar-background: 80 10% 12%; /* Very Dark Green/Grey */
+    --sidebar-foreground: 0 0% 98%; /* Near White */
+    --sidebar-primary: 81 87% 85%; /* Brighter Lime Green */
+    --sidebar-primary-foreground: 81 87% 10%; /* Very Dark Green */
+    --sidebar-accent: 81 15% 25%; /* Dark Lime Accent */
+    --sidebar-accent-foreground: 81 80% 90%; /* Lighter Lime Green */
+    --sidebar-border: 80 10% 28%; /* Medium Dark Green/Grey Border */
+    --sidebar-ring: 81 90% 88%; /* Brighter Lime Ring */
   }
 }
 
