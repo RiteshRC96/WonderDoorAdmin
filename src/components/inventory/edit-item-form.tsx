@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription, CardFooter } from "@/components/ui/card"; // Removed CardTitle
 import { useToast } from "@/hooks/use-toast";
 import { updateItemAction } from "@/app/inventory/actions"; // Import update action
 import { AddItemSchema, type AddItemInput } from "@/schemas/inventory";
@@ -50,31 +50,29 @@ export function EditItemForm({ item }: EditItemFormProps) {
       material: item.material || "",
       dimensions: item.dimensions || "",
       weight: item.weight || "",
-      stock: item.stock ?? 0, // Use nullish coalescing for potential undefined
-      price: item.price ?? 0, // Use nullish coalescing for potential undefined
+      stock: item.stock ?? 0,
+      price: item.price ?? 0,
       leadTime: item.leadTime || "",
       description: item.description || "",
       imageUrl: item.imageUrl || "",
-      imageHint: item.imageHint || "",
+      // imageHint is removed from schema and form
     },
   });
 
   async function onSubmit(values: AddItemInput) {
     setIsSubmitting(true);
     try {
-      const result = await updateItemAction(item.id, values); // Pass item ID and updated values
+      const result = await updateItemAction(item.id, values);
 
       if (result.success) {
         toast({
           title: "Success!",
           description: result.message,
         });
-        // Redirect back to the item detail page after successful update
         router.push(`/inventory/${item.id}`);
-        router.refresh(); // Force refresh the detail page to show updated data
+        router.refresh();
 
       } else {
-        // Handle validation errors returned from the server action
         if (result.errors) {
           let firstErrorField: keyof AddItemInput | null = null;
           Object.entries(result.errors).forEach(([field, messages]) => {
@@ -105,7 +103,6 @@ export function EditItemForm({ item }: EditItemFormProps) {
            });
 
         } else {
-           // General failure message from action
            toast({
              variant: "destructive",
              title: "Error",
@@ -121,14 +118,13 @@ export function EditItemForm({ item }: EditItemFormProps) {
          description: "An unexpected error occurred. Please try again.",
        });
     } finally {
-       setIsSubmitting(false); // Ensure submitting is set to false regardless of outcome
+       setIsSubmitting(false);
     }
   }
 
   return (
     <Card className="max-w-4xl mx-auto shadow-md">
       <CardHeader>
-        {/* Title is handled by the page */}
         <CardDescription>Update the details for item "{item.name}". Fields marked with * are required.</CardDescription>
       </CardHeader>
        <Form {...form}>
@@ -156,7 +152,7 @@ export function EditItemForm({ item }: EditItemFormProps) {
                     control={form.control}
                     name="sku"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem title="Stock Keeping Unit: A unique identifier for each distinct product and service that can be purchased.">
                         <FormLabel>SKU *</FormLabel>
                         <FormControl>
                           <Input placeholder="e.g., MOD-OAK-3680" {...field} aria-invalid={!!form.formState.errors.sku} />
@@ -294,36 +290,21 @@ export function EditItemForm({ item }: EditItemFormProps) {
             {/* Media Section */}
              <div className="space-y-4">
                 <h3 className="text-lg font-semibold border-b pb-2">Media</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
+                <FormField
                      control={form.control}
                      name="imageUrl"
                      render={({ field }) => (
                        <FormItem>
                          <FormLabel>Image URL (Optional)</FormLabel>
                          <FormControl>
-                           <Input type="url" placeholder="https://..." {...field} aria-invalid={!!form.formState.errors.imageUrl} />
+                           <Input type="url" placeholder="https://..." {...field} value={field.value ?? ''} aria-invalid={!!form.formState.errors.imageUrl} />
                          </FormControl>
-                         <FormDescription>Enter the full URL of the main product image.</FormDescription>
+                         <FormDescription>Enter the full URL of the main product image (e.g., from Google Drive - ensure link sharing is enabled).</FormDescription>
                          <FormMessage />
                        </FormItem>
                      )}
                    />
-                     <FormField
-                     control={form.control}
-                     name="imageHint"
-                     render={({ field }) => (
-                       <FormItem>
-                         <FormLabel>Image Hint (Optional)</FormLabel>
-                         <FormControl>
-                           <Input placeholder="e.g., modern oak door" {...field} aria-invalid={!!form.formState.errors.imageHint} />
-                         </FormControl>
-                          <FormDescription>Keywords for AI search (if URL is blank).</FormDescription>
-                         <FormMessage />
-                       </FormItem>
-                     )}
-                   />
-                </div>
+                 {/* Removed imageHint field */}
             </div>
 
            </CardContent>

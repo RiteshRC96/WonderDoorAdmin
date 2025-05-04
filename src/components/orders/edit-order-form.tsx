@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -18,20 +19,26 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription, CardFooter } from "@/components/ui/card"; // Removed CardTitle
 import { useToast } from "@/hooks/use-toast";
 import { updateOrderAction } from "@/app/orders/actions"; // Use update action
 import { OrderSchema, type OrderInput, type Order } from "@/schemas/order"; // Use OrderInput and Order types
+// AddItemInput used for inventory selection type, implicit removal of imageHint
 import type { AddItemInput } from '@/schemas/inventory';
 import { Loader2, PlusCircle, Trash2, DollarSign } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 // Structure for inventory items used in selection dropdown
+// Implicit removal of imageHint via AddItemInput
 interface InventorySelectItem extends AddItemInput {
   id: string;
   createdAt?: string;
   updatedAt?: string;
+  imageUrl?: string; // Keep explicit
+  name: string; // Ensure required fields
+  sku: string;
+  stock: number;
 }
 
 interface EditOrderFormProps {
@@ -44,11 +51,10 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [selectedItemDetails, setSelectedItemDetails] = React.useState<Record<number, InventorySelectItem | null>>(() => {
-      // Initialize selectedItemDetails based on existing order items
       const initialDetails: Record<number, InventorySelectItem | null> = {};
       order.items.forEach((item, index) => {
           const foundItem = inventoryItems.find(invItem => invItem.id === item.itemId);
-          initialDetails[index] = foundItem || null; // Store the found item or null
+          initialDetails[index] = foundItem || null;
       });
       return initialDetails;
   });
@@ -56,21 +62,21 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
 
   const form = useForm<OrderInput>({
     resolver: zodResolver(OrderSchema),
-    defaultValues: { // Pre-fill form with existing order data
+    defaultValues: {
       customer: order.customer,
-      items: order.items.map(item => ({ // Ensure items match OrderItemSchema structure
+      // Map items ensuring imageHint is excluded from the default values
+      items: order.items.map(item => ({
           itemId: item.itemId,
           name: item.name,
           sku: item.sku,
           quantity: item.quantity,
           price: item.price,
           image: item.image || '',
-          imageHint: item.imageHint || ''
+          // imageHint is removed from OrderItemSchema and thus not included here
       })),
       status: order.status,
       paymentStatus: order.paymentStatus,
       shippingMethod: order.shippingMethod || "",
-      // Don't include ID, total, createdAt, updatedAt here as they are not part of OrderInput schema
     },
   });
 
@@ -101,7 +107,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
       form.setValue(`items.${index}.price`, selectedItem.price || 0);
       form.trigger(`items.${index}.price`);
       form.setValue(`items.${index}.image`, selectedItem.imageUrl || '');
-      form.setValue(`items.${index}.imageHint`, selectedItem.imageHint || '');
+      // imageHint setValue removed
       setSelectedItemDetails(prev => ({ ...prev, [index]: selectedItem }));
     } else {
        form.setValue(`items.${index}.name`, '');
@@ -109,7 +115,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
        form.setValue(`items.${index}.price`, 0);
        form.trigger(`items.${index}.price`);
        form.setValue(`items.${index}.image`, '');
-       form.setValue(`items.${index}.imageHint`, '');
+       // imageHint setValue removed
       setSelectedItemDetails(prev => ({ ...prev, [index]: null }));
     }
   };
@@ -117,7 +123,6 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
   async function onSubmit(values: OrderInput) {
     setIsSubmitting(true);
     try {
-        // Ensure all items have a valid itemId before submission
         const hasInvalidItems = values.items.some(item => !item.itemId);
         if (hasInvalidItems) {
             toast({
@@ -128,7 +133,6 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
             setIsSubmitting(false);
             return;
         }
-      // Pass the order ID along with the updated data
       const result = await updateOrderAction(order.id, values);
 
       if (result.success) {
@@ -136,13 +140,11 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
           title: "Success!",
           description: result.message,
         });
-        router.push(`/orders/${order.id}`); // Redirect back to the order detail page
-        router.refresh(); // Ensure the detail page data is refreshed
+        router.push(`/orders/${order.id}`);
+        router.refresh();
 
       } else {
-        // Handle validation or other errors from the server action
          if (result.errors) {
-            // ... (error handling logic similar to create form) ...
              let firstErrorField: keyof OrderInput | string | null = null;
              if (result.errors.customer) {
                  firstErrorField = `customer.${Object.keys(result.errors.customer)[0]}` as keyof OrderInput;
@@ -178,7 +180,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
              description: result.message || "Failed to update order. Please try again.",
            });
         }
-        setIsSubmitting(false); // Keep form active on error
+        setIsSubmitting(false);
       }
     } catch (error) {
        console.error("Order update error:", error);
@@ -267,7 +269,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => append({ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "", imageHint: "" })}
+                        onClick={() => append({ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "" })} // Removed imageHint from append
                         disabled={isSubmitting}
                     >
                         <PlusCircle className="mr-2 h-4 w-4" /> Add Item
@@ -285,7 +287,8 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                                 width={80}
                                 height={80}
                                 className="object-cover w-full h-full"
-                                data-ai-hint={selectedItemDetails[index]?.imageHint || form.getValues(`items.${index}.imageHint`) || 'product item'}
+                                // Use name/style as fallback for data-ai-hint
+                                data-ai-hint={selectedItemDetails[index]?.name || selectedItemDetails[index]?.style || 'product item'}
                               />
                              ) : (
                                 <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No Image</div>
@@ -368,7 +371,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                                 </FormItem>
                                 )}
                             />
-                            {/* Line Total (Calculated Display) */}
+                            {/* Line Total */}
                             <FormItem>
                                 <FormLabel>Line Total</FormLabel>
                                 <div className="h-10 flex items-center px-3 py-2 text-sm font-medium text-muted-foreground">

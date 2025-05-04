@@ -1,5 +1,4 @@
 
-
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -24,12 +23,22 @@ import {
 import { format, formatDistanceToNow } from 'date-fns'; // For formatting dates
 
 // Define the structure of an inventory item including its ID and related data
-interface InventoryItem extends AddItemInput {
+// Removed imageHint from AddItemInput Omit
+interface InventoryItem extends Omit<AddItemInput, 'imageHint'> {
   id: string;
   createdAt?: string; // Keep serialized date
   updatedAt?: string; // Keep serialized date for last update
   relatedOrders?: { id: string; date: string; status: Order['status'] }[];
   relatedShipments?: { id: string; status: Shipment['status']; trackingNumber: string }[];
+  imageUrl?: string; // Keep imageUrl explicit
+  name: string; // Ensure required fields
+  sku: string;
+  style: string;
+  material: string;
+  dimensions: string;
+  stock: number;
+  price: number;
+  imageHint?: string; // Keep for data-ai-hint fallback
 }
 
 
@@ -52,19 +61,20 @@ async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | n
     }
 
     console.log("Item found in Firestore.");
-    const data = docSnap.data() as AddItemInput & { createdAt?: Timestamp, updatedAt?: Timestamp }; // Add updatedAt
+    // Cast data including optional imageUrl and possible imageHint
+    const data = docSnap.data() as AddItemInput & { createdAt?: Timestamp, updatedAt?: Timestamp, imageHint?: string };
 
     // Convert Timestamps to ISO strings
     const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined;
     const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
 
-    const { createdAt: _, updatedAt: __, ...restData } = data; // Remove timestamps before spreading
+    // Exclude original timestamps before spreading
+    const { createdAt: _, updatedAt: __, ...restData } = data;
 
     // --- Fetch Related Orders ---
     let relatedOrders: InventoryItem['relatedOrders'] = [];
     try {
         const ordersRef = collection(db, 'orders');
-        // Fetching all orders and filtering client-side (demonstration only - NOT scalable).
         console.warn("Fetching all orders to find related ones - this is not scalable for production.");
         const ordersSnapshot = await getDocs(collection(db, 'orders'));
         ordersSnapshot.forEach(orderDoc => {
@@ -112,7 +122,9 @@ async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | n
 
     const itemData: InventoryItem = {
       id: docSnap.id,
-      ...restData,
+      ...(restData as Omit<AddItemInput, 'imageHint'>), // Cast restData appropriately
+      imageHint: data.imageHint, // Explicitly add imageHint back if it exists
+      imageUrl: data.imageUrl, // Keep imageUrl
       createdAt,
       updatedAt, // Add updatedAt here
       relatedOrders,
@@ -243,7 +255,8 @@ export default async function InventoryItemPage({ params }: { params: { itemId: 
                  alt={item.name}
                  layout="fill"
                  objectFit="cover"
-                 data-ai-hint={item.imageHint || 'product image'}
+                 // Use item name or style as fallback hint if imageHint was removed/absent
+                 data-ai-hint={item.imageHint || item.name || item.style || 'product image'}
                  className="bg-white"
                />
              </div>

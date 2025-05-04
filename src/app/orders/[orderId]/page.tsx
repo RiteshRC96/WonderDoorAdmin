@@ -37,6 +37,7 @@ async function getOrderDetails(orderId: string): Promise<{ order: Order | null; 
 
     if (docSnap.exists()) {
       console.log("Order found in Firestore.");
+       // Type cast data, expecting it to conform to Order structure (now without imageHint in items)
        const data = docSnap.data() as Omit<Order, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
 
        // Convert Timestamps to ISO strings for serialization
@@ -49,11 +50,18 @@ async function getOrderDetails(orderId: string): Promise<{ order: Order | null; 
 
       const orderData: Order = {
         id: docSnap.id,
-        ...(data as Order), // Assume data matches Order structure for simplicity here
+        ...(data as Order), // Assume data matches Order structure after timestamp conversion
         createdAt,
         updatedAt,
-         items: data.items || [], // Ensure items array exists
-         // Ensure total is a number, default to 0 if missing/invalid
+         items: data.items?.map(item => ({ // Ensure items array exists and map to remove potential imageHint
+             itemId: item.itemId,
+             name: item.name,
+             sku: item.sku,
+             quantity: item.quantity,
+             price: item.price,
+             image: item.image || '',
+             // imageHint is removed here explicitly if it somehow existed in DB
+         })) || [],
          total: typeof data.total === 'number' ? data.total : 0,
       };
       return { order: orderData };
@@ -130,10 +138,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
      notFound(); // Use Next.js notFound utility for 404 page
    }
 
-   // --- Calculation Note ---
-   // We are now using the `total` directly from the Order object fetched from Firestore.
    const displayTotal = order.total;
-   // --- End Calculation Note ---
 
   return (
     <div className="container mx-auto py-6 animate-subtle-fade-in space-y-6">
@@ -189,8 +194,6 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                     </CardDescription>
                 )}
              </div>
-              {/* Status Badge Removed - Handled by OrderStatusUpdater now */}
-              {/* <Badge variant={getStatusVariant(order.status)} className="text-base md:text-lg px-3 py-1 md:px-4 md:py-1.5 whitespace-nowrap shrink-0">{order.status}</Badge> */}
           </CardHeader>
           <Separator />
           <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
@@ -217,10 +220,9 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                  <p className="text-sm"><span className="text-muted-foreground">Total Items:</span> {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
              </div>
 
-              {/* Totals - Simplified as total comes from DB */}
+              {/* Totals */}
              <div className="space-y-2 md:text-right">
                  <h3 className="text-lg font-semibold flex items-center gap-2 md:justify-end"><DollarSign className="h-5 w-5 text-muted-foreground" /> Order Total</h3>
-                 {/* Displaying the total stored in the database */}
                  <p className="text-2xl font-bold text-primary">${displayTotal.toFixed(2)}</p>
                  <p className="text-xs text-muted-foreground md:text-right">(Includes items, shipping, taxes)</p>
              </div>
@@ -255,7 +257,8 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                         alt={item.name}
                         width={64} height={64}
                         className="rounded-md aspect-square object-cover border"
-                        data-ai-hint={item.imageHint || 'product item'}
+                        // Use item name as fallback for data-ai-hint
+                        data-ai-hint={item.name || 'product item'}
                       />
                    </TableCell>
                    <TableCell className="font-medium">
@@ -290,4 +293,3 @@ export async function generateMetadata({ params }: { params: { orderId: string }
 
 // Ensure dynamic rendering because data is fetched on each request
 export const dynamic = 'force-dynamic';
-

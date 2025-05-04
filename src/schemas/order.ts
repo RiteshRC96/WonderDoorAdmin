@@ -1,6 +1,7 @@
 
 import { z } from 'zod';
-import { AddItemSchema } from './inventory'; // Assuming inventory items are part of an order
+// Assuming inventory schema exists, but imageHint is removed from it too
+// import { AddItemSchema } from './inventory';
 
 // Schema for customer details within an order
 const CustomerSchema = z.object({
@@ -11,6 +12,7 @@ const CustomerSchema = z.object({
 });
 
 // Schema for an item within an order
+// Removed imageHint
 const OrderItemSchema = z.object({
   itemId: z.string(), // Reference to the inventory item ID
   name: z.string(), // Denormalized for display
@@ -18,19 +20,16 @@ const OrderItemSchema = z.object({
   quantity: z.coerce.number().int().min(1, "Quantity must be at least 1."),
   price: z.coerce.number().min(0, "Price cannot be negative."), // Price per unit at the time of order
   image: z.string().url().optional().or(z.literal('')), // Denormalized for display
-  imageHint: z.string().optional(), // Denormalized for display
+  // imageHint: z.string().optional(), // Removed
 });
 
 // Schema for creating/updating an order
 export const OrderSchema = z.object({
   customer: CustomerSchema,
   items: z.array(OrderItemSchema).min(1, "Order must contain at least one item."),
-  status: z.enum(['Processing', 'Shipped', 'Delivered', 'Cancelled', 'Pending Payment']), // Define possible statuses
+  status: z.enum(['Processing', 'Shipped', 'Delivered', 'Cancelled', 'Pending Payment']),
   paymentStatus: z.enum(['Paid', 'Pending', 'Refunded', 'Failed']),
   shippingMethod: z.string().optional(),
-  // Dates will be handled by Firestore Timestamps on the server
-  // total: z.number(), // Calculated on the server or client based on items
-  // shipmentId: z.string().optional(), // Link to shipment if applicable
 });
 
 export type OrderInput = z.infer<typeof OrderSchema>;
@@ -44,5 +43,5 @@ export interface Order extends OrderInput {
   shipmentId?: string;
 }
 
-// Define the structure for creating a new order (might differ slightly, e.g., no ID yet)
+// Define the structure for creating a new order (matches OrderInput)
 export interface CreateOrderInput extends OrderInput {}

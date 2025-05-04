@@ -17,10 +17,19 @@ import { notFound } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Define the structure of an inventory item including its ID and serializable timestamps
-interface InventoryItem extends AddItemInput {
+// Removed imageHint from AddItemInput Omit
+interface InventoryItem extends Omit<AddItemInput, 'imageHint'> {
   id: string;
   createdAt?: string; // Expect ISO string
   updatedAt?: string; // Expect ISO string
+  imageUrl?: string; // Keep imageUrl explicitly
+  name: string; // Ensure required fields
+  sku: string;
+  style: string;
+  material: string;
+  dimensions: string;
+  stock: number;
+  price: number;
 }
 
 // Fetch item details, similar to the detail page but without related data
@@ -39,17 +48,19 @@ async function getItemForEdit(itemId: string): Promise<{ item: InventoryItem | n
       return { item: null }; // Not found
     }
 
-    const data = docSnap.data() as AddItemInput & { createdAt?: Timestamp, updatedAt?: Timestamp };
+    // Cast data including optional imageUrl, exclude imageHint
+    const data = docSnap.data() as Omit<AddItemInput, 'imageHint'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
 
     // Convert Timestamps to ISO strings for serialization
     const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined;
     const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
 
-    const { createdAt: _, updatedAt: __, ...restData } = data; // Remove timestamps before spreading
+    // Exclude timestamps before spreading
+    const { createdAt: _, updatedAt: __, ...restData } = data;
 
     const itemData: InventoryItem = {
       id: docSnap.id,
-      ...restData,
+      ...restData, // Spread the rest of the data (without imageHint)
       createdAt,
       updatedAt,
     };

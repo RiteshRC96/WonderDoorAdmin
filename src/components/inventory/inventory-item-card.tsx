@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -24,11 +25,22 @@ import { Badge } from "@/components/ui/badge"; // Import Badge
 import { cn } from "@/lib/utils"; // Import cn utility
 
 // Expect timestamps as strings (ISO format) from the Server Component
-interface InventoryItem extends Omit<AddItemInput, 'createdAt' | 'updatedAt'> {
+// Removed imageHint from AddItemInput Omit
+interface InventoryItem extends Omit<AddItemInput, 'createdAt' | 'updatedAt' | 'imageHint'> {
   id: string;
   createdAt?: string; // Expecting ISO string or undefined
   updatedAt?: string; // Expecting ISO string or undefined
+  imageUrl?: string; // Keep imageUrl explicitly for clarity
+  name: string; // Ensure required fields are present
+  sku: string;
+  style: string;
+  material: string;
+  dimensions: string;
+  stock: number;
+  price: number;
+  imageHint?: string; // Keep for data-ai-hint even if not in schema
 }
+
 
 interface InventoryItemCardProps {
   item: InventoryItem;
@@ -88,7 +100,8 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
               fill={true} // Use fill instead of layout="fill"
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Provide sizes prop for fill
               style={{ objectFit: 'cover' }} // Use style for objectFit
-              data-ai-hint={item.imageHint || 'product item'}
+              // Use item name or style as fallback hint if imageHint was removed
+              data-ai-hint={item.name || item.style || 'product item'}
               className="transition-transform duration-300 ease-in-out group-hover:scale-105 bg-white" // Added bg-white for placeholder
               priority={false} // Consider setting priority based on position (e.g., true for first few items)
             />

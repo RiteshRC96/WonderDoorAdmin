@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { useToast } from "@/hooks/use-toast";
 import { createOrderAction } from "@/app/orders/actions";
 import { OrderSchema, type CreateOrderInput, type OrderInput } from "@/schemas/order";
+// AddItemInput still used for inventory selection type, imageHint removed there too implicitly
 import type { AddItemInput } from '@/schemas/inventory';
 import { Loader2, PlusCircle, Trash2, DollarSign, AlertTriangle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
@@ -30,10 +31,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 // Define the structure of an inventory item passed for selection
+// AddItemInput from schema already excludes imageHint
 interface InventorySelectItem extends AddItemInput {
   id: string;
   createdAt?: string;
   updatedAt?: string;
+  imageUrl?: string; // Keep explicit
+  name: string; // Ensure required fields
+  sku: string;
+  stock: number;
 }
 
 interface CreateOrderFormProps {
@@ -56,7 +62,8 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
         phone: "",
         address: "",
       },
-      items: [{ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "", imageHint: "" }], // Start with one item row
+      // Initialize items array according to OrderItemSchema (which now excludes imageHint)
+      items: [{ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "" }],
       status: "Processing", // Default status
       paymentStatus: "Pending", // Default payment status
       shippingMethod: "",
@@ -89,20 +96,17 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
       form.setValue(`items.${index}.name`, selectedItem.name);
       form.setValue(`items.${index}.sku`, selectedItem.sku);
       form.setValue(`items.${index}.price`, selectedItem.price || 0);
-       // Ensure price is cleared or set if item changes, triggering re-validation
-      form.trigger(`items.${index}.price`); // Trigger validation for price
-      // Update image details if available
+      form.trigger(`items.${index}.price`);
       form.setValue(`items.${index}.image`, selectedItem.imageUrl || '');
-      form.setValue(`items.${index}.imageHint`, selectedItem.imageHint || '');
+      // Removed imageHint setValue
       setSelectedItemDetails(prev => ({ ...prev, [index]: selectedItem }));
     } else {
-       // Clear fields if item is deselected or not found
        form.setValue(`items.${index}.name`, '');
        form.setValue(`items.${index}.sku`, '');
-       form.setValue(`items.${index}.price`, 0); // Reset price
-       form.trigger(`items.${index}.price`); // Trigger validation
+       form.setValue(`items.${index}.price`, 0);
+       form.trigger(`items.${index}.price`);
        form.setValue(`items.${index}.image`, '');
-       form.setValue(`items.${index}.imageHint`, '');
+       // Removed imageHint setValue
       setSelectedItemDetails(prev => ({ ...prev, [index]: null }));
     }
   };
@@ -134,13 +138,10 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
 
       } else {
         if (result.errors) {
-          // Handle specific field errors (less common for orders, more for inventory)
            let firstErrorField: keyof OrderInput | string | null = null;
-           // Simplified error handling for order form - focus on customer or items array
            if (result.errors.customer) {
                firstErrorField = `customer.${Object.keys(result.errors.customer)[0]}` as keyof OrderInput;
            } else if (result.errors.items) {
-               // Find the first item with an error
                const itemErrorIndex = Object.keys(result.errors.items)[0];
                 if (itemErrorIndex && result.errors.items[itemErrorIndex as any]) {
                   const fieldError = Object.keys(result.errors.items[itemErrorIndex as any])[0];
@@ -148,10 +149,9 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                 }
            }
 
-           // Generic focus fallback if specific field isn't found easily
            if (firstErrorField) {
              try {
-                 form.setError(firstErrorField.split('.')[0] as any, { message: 'Check fields' }); // Mark top level field
+                 form.setError(firstErrorField.split('.')[0] as any, { message: 'Check fields' });
                  setTimeout(() => {
                       const firstErrorElement = document.querySelector<HTMLElement>(`[aria-invalid="true"]`);
                       if (firstErrorElement) {
@@ -279,7 +279,7 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => append({ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "", imageHint: "" })}
+                        onClick={() => append({ itemId: "", name: "", sku: "", quantity: 1, price: 0, image: "" })} // Removed imageHint from append
                         disabled={isSubmitting}
                     >
                         <PlusCircle className="mr-2 h-4 w-4" /> Add Item
@@ -290,14 +290,15 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                     <div key={field.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 border p-4 rounded-md relative">
                          {/* Item Image Thumbnail */}
                          <div className="flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-md overflow-hidden border bg-muted">
-                            {selectedItemDetails[index]?.imageUrl ? (
+                            {(selectedItemDetails[index]?.imageUrl || form.getValues(`items.${index}.image`)) ? (
                               <Image
-                                src={selectedItemDetails[index]?.imageUrl ?? ''}
+                                src={selectedItemDetails[index]?.imageUrl || form.getValues(`items.${index}.image`) || ''}
                                 alt={selectedItemDetails[index]?.name ?? 'Product Image'}
                                 width={80}
                                 height={80}
                                 className="object-cover w-full h-full"
-                                data-ai-hint={selectedItemDetails[index]?.imageHint || 'product item'}
+                                // Use name/style as fallback for data-ai-hint
+                                data-ai-hint={selectedItemDetails[index]?.name || selectedItemDetails[index]?.style || 'product item'}
                               />
                             ) : (
                                <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">No Image</div>
@@ -365,13 +366,12 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                 <FormItem>
                                     <FormLabel>Unit Price ($)</FormLabel>
                                     <FormControl>
-                                    {/* Display price, potentially read-only */}
                                      <Input
                                         type="number"
                                         step="0.01"
-                                        readOnly // Price comes from selected item
+                                        readOnly
                                         {...field}
-                                        value={field.value || 0} // Ensure value is controlled
+                                        value={field.value || 0}
                                         className="bg-muted/50"
                                         aria-invalid={!!form.formState.errors.items?.[index]?.price}
                                         />
@@ -380,7 +380,7 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                                 </FormItem>
                                 )}
                             />
-                            {/* Line Total (Calculated Display) */}
+                            {/* Line Total */}
                             <FormItem>
                                 <FormLabel>Line Total</FormLabel>
                                 <div className="h-10 flex items-center px-3 py-2 text-sm font-medium text-muted-foreground">
@@ -396,7 +396,7 @@ export function CreateOrderForm({ inventoryItems, fetchError }: CreateOrderFormP
                             size="icon"
                             className="text-destructive hover:bg-destructive/10 absolute top-1 right-1 md:relative md:top-auto md:right-auto md:self-center"
                             onClick={() => remove(index)}
-                            disabled={isSubmitting || fields.length <= 1} // Prevent removing the last item
+                            disabled={isSubmitting || fields.length <= 1}
                             aria-label="Remove item"
                           >
                             <Trash2 className="h-4 w-4" />
