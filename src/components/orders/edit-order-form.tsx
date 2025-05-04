@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardDescription, CardFooter } from "@/components/ui/card"; // Removed CardTitle
+import { Card, CardContent, CardHeader, CardDescription, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { updateOrderAction } from "@/app/orders/actions"; // Use update action
 // Import the enums along with the types/schema
@@ -51,13 +52,12 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
   const [selectedItemDetails, setSelectedItemDetails] = React.useState<Record<number, InventorySelectItem | null>>(() => {
       const initialDetails: Record<number, InventorySelectItem | null> = {};
       order.items.forEach((item, index) => {
-          // Find the matching inventory item based on 'itemId' (which maps to 'doorId' in DB)
-          const foundItem = inventoryItems.find(invItem => invItem.id === item.itemId);
+          // Find the matching inventory item based on 'doorId' from DB
+          const foundItem = inventoryItems.find(invItem => invItem.id === item.doorId);
           initialDetails[index] = foundItem || null;
       });
       return initialDetails;
   });
-
 
   const form = useForm<OrderInput>({
     resolver: zodResolver(OrderSchema),
@@ -140,6 +140,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
             setIsSubmitting(false);
             return;
         }
+      // Use the Order ID from the passed `order` prop
       const result = await updateOrderAction(order.id, values);
 
       if (result.success) {
@@ -186,8 +187,6 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                  try {
                       // Focus logic might need refinement depending on field structure
                       const fieldName = firstErrorField.includes('.') ? firstErrorField : firstErrorField;
-                      // form.setFocus(fieldName as any); // This might fail for nested array fields
-                      // Fallback focus or general error display might be better
                       console.log("Focusing attempt on:", fieldName);
                      setTimeout(() => {
                           const firstErrorElement = document.querySelector<HTMLElement>(`[aria-invalid="true"]`);
@@ -408,13 +407,16 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                                     <Input
                                         type="number"
                                         min="1"
-                                        max={selectedItemDetails[index]?.stock ?? 1} // Set max based on stock
+                                        // Consider original quantity + current stock for max in edit? Complex logic.
+                                        // For simplicity, just using current stock. May need adjustment based on workflow.
+                                        max={selectedItemDetails[index]?.stock ?? 1}
                                         {...field}
                                         onChange={e => {
+                                            // Recalculate max based on current selection
                                             const maxStock = selectedItemDetails[index]?.stock ?? 1;
                                             let value = parseInt(e.target.value, 10) || 1;
-                                            if (value > maxStock) value = maxStock; // Cap at max stock
-                                            if (value < 1) value = 1; // Ensure minimum 1
+                                            if (value > maxStock) value = maxStock;
+                                            if (value < 1) value = 1;
                                             field.onChange(value);
                                         }}
                                         aria-invalid={!!form.formState.errors.items?.[index]?.quantity}
@@ -486,7 +488,6 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Order Status *</FormLabel>
-                                {/* Use enum values for Select */}
                                 <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
                                 <FormControl>
                                     <SelectTrigger aria-invalid={!!form.formState.errors.status}>
@@ -509,7 +510,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Payment Status *</FormLabel>
-                                {/* Use enum values for Select */}
+                                {/* Use UPDATED enum values for Select */}
                                 <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
                                 <FormControl>
                                     <SelectTrigger aria-invalid={!!form.formState.errors.paymentStatus}>
