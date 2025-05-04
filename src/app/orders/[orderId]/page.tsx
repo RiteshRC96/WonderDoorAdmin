@@ -223,7 +223,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
               {/* Totals */}
              <div className="space-y-2 md:text-right">
                  <h3 className="text-lg font-semibold flex items-center gap-2 md:justify-end"><DollarSign className="h-5 w-5 text-muted-foreground" /> Order Total</h3>
-                 <p className="text-2xl font-bold text-primary">${displayTotal.toFixed(2)}</p>
+                 <p className="text-2xl font-bold text-primary">₹{displayTotal.toFixed(2)}</p>
                  <p className="text-xs text-muted-foreground md:text-right">(Includes items, shipping, taxes)</p>
              </div>
           </CardContent>
@@ -269,8 +269,8 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                     </TableCell>
                    <TableCell>{item.sku}</TableCell>
                    <TableCell className="text-center">{item.quantity}</TableCell>
-                   <TableCell className="text-right">${item.price.toFixed(2)}</TableCell>
-                   <TableCell className="text-right font-medium">${(item.price * item.quantity).toFixed(2)}</TableCell>
+                   <TableCell className="text-right">₹{item.price.toFixed(2)}</TableCell>
+                   <TableCell className="text-right font-medium">₹{(item.price * item.quantity).toFixed(2)}</TableCell>
                  </TableRow>
                ))}
              </TableBody>

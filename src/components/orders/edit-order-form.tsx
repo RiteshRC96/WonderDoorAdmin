@@ -354,7 +354,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                                 name={`items.${index}.price`}
                                 render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Unit Price ($)</FormLabel>
+                                    <FormLabel>Unit Price (₹)</FormLabel>
                                     <FormControl>
                                      <Input
                                         type="number"
@@ -374,7 +374,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                             <FormItem>
                                 <FormLabel>Line Total</FormLabel>
                                 <div className="h-10 flex items-center px-3 py-2 text-sm font-medium text-muted-foreground">
-                                 ${(form.getValues(`items.${index}.price`) * form.getValues(`items.${index}.quantity`)).toFixed(2)}
+                                 ₹{(form.getValues(`items.${index}.price`) * form.getValues(`items.${index}.quantity`)).toFixed(2)}
                                 </div>
                              </FormItem>
                          </div>
@@ -464,7 +464,7 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                 {/* Order Total */}
                  <div className="space-y-2 self-end">
                     <h3 className="text-lg font-semibold border-b pb-2 flex items-center gap-2 justify-end"><DollarSign className="h-5 w-5 text-muted-foreground" /> Order Total</h3>
-                    <p className="text-3xl font-bold text-primary text-right">${orderTotal.toFixed(2)}</p>
+                    <p className="text-3xl font-bold text-primary text-right">₹{orderTotal.toFixed(2)}</p>
                     <p className="text-xs text-muted-foreground text-right">(Excludes tax/shipping for now)</p>
                  </div>
              </div>

@@ -130,7 +130,7 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
 
        {/* Footer: Price and Delete Button */}
        <CardFooter className="p-4 pt-2 flex justify-between items-center border-t mt-auto"> {/* Added border-t and mt-auto */}
-           <p className="text-xl font-bold text-primary">${item.price?.toFixed(2) || 'N/A'}</p>
+           <p className="text-xl font-bold text-primary">₹{item.price?.toFixed(2) || 'N/A'}</p>
            {/* Control AlertDialog visibility with state */}
          <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
            <AlertDialogTrigger asChild>

@@ -255,7 +255,7 @@ export default function OrdersPage() {
                     </TableCell>
                    <TableCell>{order.customer.name}</TableCell>
                     <TableCell>{format(new Date(order.createdAt), 'PP')}</TableCell>
-                   <TableCell className="text-right">${order.total.toFixed(2)}</TableCell>
+                   <TableCell className="text-right">₹{order.total.toFixed(2)}</TableCell>
                     <TableCell className="text-center">{order.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
                    <TableCell className="text-center">
                      <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
@@ -317,4 +317,3 @@ export default function OrdersPage() {
 // };
 
 // export const dynamic = 'force-dynamic';
-

@@ -297,7 +297,7 @@ export default async function InventoryItemPage({ params }: { params: { itemId: 
                             </Badge>
                         </div>
                         <div className="text-2xl font-bold text-primary col-span-2 mt-2 flex items-baseline gap-2">
-                         <span>Price:</span> <span>${item.price?.toFixed(2) || 'N/A'}</span>
+                         <span>Price:</span> <span>₹{item.price?.toFixed(2) || 'N/A'}</span>
                         </div>
                     </div>
                      {/* Timestamps */}
