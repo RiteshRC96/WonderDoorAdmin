@@ -18,6 +18,7 @@ import {
     where, // Import where for actions
     limit, // Import limit for queries
     getCountFromServer, // Import getCountFromServer for aggregate queries
+    writeBatch, // Import writeBatch
     type Firestore
 } from 'firebase/firestore';
 // Import getAnalytics if needed, based on config
@@ -93,4 +94,5 @@ export {
     where, // Export where
     limit, // Export limit
     getCountFromServer, // Export getCountFromServer
+    writeBatch, // Export writeBatch
 };
