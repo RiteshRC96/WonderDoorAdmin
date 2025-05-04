@@ -1,4 +1,3 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -53,6 +52,7 @@ export async function createShipmentAction(data: CreateShipmentInput): Promise<{
 
     revalidatePath('/logistics'); // Revalidate the logistics list page
     revalidatePath(`/logistics/${docRef.id}`); // Revalidate the specific shipment page
+    revalidatePath('/'); // Revalidate dashboard
 
     return {
       success: true,
@@ -137,6 +137,7 @@ export async function updateShipmentStatusAction(
 
     revalidatePath('/logistics'); // Revalidate the list page
     revalidatePath(`/logistics/${shipmentId}`); // Revalidate the detail page
+    revalidatePath('/'); // Revalidate dashboard
     // Revalidate order pages if status changed significantly (like Delivered)
      if (newStatus === 'Delivered') {
         const shipmentSnap = await getDoc(shipmentDocRef);

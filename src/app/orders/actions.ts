@@ -1,10 +1,26 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db, collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, getDoc } from '@/lib/firebase/firebase';
-import { OrderSchema, type CreateOrderInput, type Order } from '@/schemas/order'; // Import Order types/schemas
-import { Shipment, ShipmentSchema } from '@/schemas/shipment'; // Import Shipment schema for status update consistency
+import { db, collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, getDoc, writeBatch } from '@/lib/firebase/firebase';
+import { OrderSchema, type CreateOrderInput, type Order, type OrderInput } from '@/schemas/order'; // Import Order types/schemas
+import type { AddItemInput } from '@/schemas/inventory'; // For fetching item details
+
+// Helper function to fetch current item details (including stock)
+async function getInventoryItem(itemId: string): Promise<(AddItemInput & { id: string }) | null> {
+    if (!db) return null;
+    try {
+        const itemDocRef = doc(db, 'inventory', itemId);
+        const docSnap = await getDoc(itemDocRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...(docSnap.data() as AddItemInput) };
+        }
+        return null;
+    } catch (error) {
+        console.error(`Error fetching inventory item ${itemId}:`, error);
+        return null;
+    }
+}
+
 
 // Function to calculate order total
 function calculateOrderTotal(items: { price: number; quantity: number }[]): number {
@@ -13,7 +29,7 @@ function calculateOrderTotal(items: { price: number; quantity: number }[]): numb
 }
 
 // --- Create Order Action ---
-export async function createOrderAction(data: CreateOrderInput): Promise<{ success: boolean; message: string; orderId?: string; errors?: Record<string, string[]> | null }> {
+export async function createOrderAction(data: CreateOrderInput): Promise<{ success: boolean; message: string; orderId?: string; errors?: Record<string, any> | null }> {
   if (!db) {
     const errorMessage = "Database configuration error. Unable to create order.";
     console.error("Firestore database is not initialized. Cannot create order.");
@@ -26,7 +42,8 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
     return {
       success: false,
       message: "Validation failed. Please check the order details.",
-      errors: validationResult.error.flatten().fieldErrors,
+      // Use fieldErrors for specific field issues, errors for general/item array issues
+      errors: validationResult.error.flatten().fieldErrors || validationResult.error.errors,
     };
   }
 
@@ -38,30 +55,140 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
     // shipmentId can be added later when a shipment is created
   };
 
-  try {
-    console.log("Attempting to add order to Firestore...");
-    const ordersCollectionRef = collection(db, 'orders');
-    const docRef = await addDoc(ordersCollectionRef, newOrderData);
-    console.log(`Successfully added order with ID: ${docRef.id}`);
+  // --- Inventory Stock Update Logic ---
+  const batch = writeBatch(db);
+  let stockCheckFailed = false;
+  let stockErrorMessage = "";
 
-    revalidatePath('/orders'); // Revalidate the orders list page
-    revalidatePath(`/orders/${docRef.id}`); // Revalidate the specific order page if needed immediately
+  try {
+      for (const item of newOrderData.items) {
+          const inventoryItemRef = doc(db, 'inventory', item.itemId);
+          const inventoryItemSnap = await getDoc(inventoryItemRef); // Get current stock within potential transaction/batch
+
+          if (!inventoryItemSnap.exists()) {
+              stockCheckFailed = true;
+              stockErrorMessage = `Inventory item ${item.name} (ID: ${item.itemId}) not found.`;
+              break;
+          }
+
+          const currentStock = inventoryItemSnap.data()?.stock ?? 0;
+          if (currentStock < item.quantity) {
+              stockCheckFailed = true;
+              stockErrorMessage = `Insufficient stock for ${item.name}. Available: ${currentStock}, Ordered: ${item.quantity}.`;
+              break;
+          }
+
+          const newStock = currentStock - item.quantity;
+          batch.update(inventoryItemRef, { stock: newStock, updatedAt: serverTimestamp() });
+      }
+
+      if (stockCheckFailed) {
+          return { success: false, message: stockErrorMessage, errors: { items: stockErrorMessage } };
+      }
+
+      // Add the order to the batch AFTER successful stock check
+      const ordersCollectionRef = collection(db, 'orders');
+      const newOrderRef = doc(ordersCollectionRef); // Create a ref first to get the ID
+      batch.set(newOrderRef, newOrderData);
+
+      console.log("Attempting to commit order creation and stock update batch...");
+      await batch.commit(); // Commit the batch (creates order and updates stock atomically)
+      const newOrderId = newOrderRef.id; // Get the ID from the ref
+      console.log(`Successfully added order with ID: ${newOrderId} and updated stock.`);
+
+      // Revalidate paths after successful commit
+      revalidatePath('/orders');
+      revalidatePath(`/orders/${newOrderId}`);
+      revalidatePath('/inventory'); // Revalidate inventory list
+      newOrderData.items.forEach(item => revalidatePath(`/inventory/${item.itemId}`)); // Revalidate specific items
+      revalidatePath('/'); // Revalidate dashboard
+
+      return {
+        success: true,
+        message: `Order ${newOrderId} created successfully! Inventory updated.`,
+        orderId: newOrderId,
+      };
+  } catch (error) {
+      const errorMessage = `Error during order creation/stock update: ${error instanceof Error ? error.message : String(error)}`;
+      console.error(errorMessage);
+      // More specific error message if possible
+      const userMessage = errorMessage.includes("stock")
+            ? "Failed to update inventory stock. Please try again or check inventory levels."
+            : "Failed to create order due to a database error.";
+      return {
+        success: false,
+        message: userMessage,
+        errors: null,
+      };
+    }
+}
+
+// --- Update Order Action ---
+export async function updateOrderAction(
+  orderId: string,
+  data: OrderInput
+): Promise<{ success: boolean; message: string; errors?: Record<string, any> | null }> {
+  if (!db) {
+    const errorMessage = "Database configuration error. Unable to update order.";
+    console.error("Firestore database is not initialized.");
+    return { success: false, message: errorMessage, errors: null };
+  }
+  if (!orderId) {
+    return { success: false, message: "Order ID is required.", errors: null };
+  }
+
+  const validationResult = OrderSchema.safeParse(data);
+  if (!validationResult.success) {
+    console.error("Order Update Validation Errors:", validationResult.error.flatten().fieldErrors);
+    return {
+      success: false,
+      message: "Validation failed. Please check the order details.",
+      errors: validationResult.error.flatten().fieldErrors || validationResult.error.errors,
+    };
+  }
+
+  // *** Initial Implementation: Does NOT adjust inventory on edit ***
+  // A full implementation would:
+  // 1. Get the original order items.
+  // 2. Calculate stock difference between original and new items.
+  // 3. Use a transaction to update order AND adjust inventory stock atomically.
+  // This adds significant complexity.
+
+  const orderDataToUpdate = {
+    ...validationResult.data,
+    updatedAt: serverTimestamp(), // Update the timestamp
+    total: calculateOrderTotal(validationResult.data.items), // Recalculate total
+  };
+
+  try {
+    console.log(`Attempting to update order with ID: ${orderId}`);
+    const orderDocRef = doc(db, 'orders', orderId);
+    await updateDoc(orderDocRef, orderDataToUpdate);
+
+    console.log(`Successfully updated order with ID: ${orderId}`);
+
+    // Revalidate relevant paths
+    revalidatePath('/orders');
+    revalidatePath(`/orders/${orderId}`);
+    revalidatePath(`/orders/${orderId}/edit`);
+    revalidatePath('/'); // Revalidate dashboard
 
     return {
       success: true,
-      message: `Order ${docRef.id} created successfully!`,
-      orderId: docRef.id,
+      message: `Order '${orderId}' updated successfully!`,
     };
+
   } catch (error) {
-    const errorMessage = `Error adding order to Firestore: ${error instanceof Error ? error.message : String(error)}`;
+    const errorMessage = `Error updating order in Firestore (ID: ${orderId}): ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMessage);
     return {
       success: false,
-      message: "Failed to create order due to a database error.",
+      message: "Failed to update order due to a database error. Please try again.",
       errors: null,
     };
   }
 }
+
 
 // --- Update Order Status Action ---
 export async function updateOrderStatusAction(orderId: string, newStatus: Order['status'], newPaymentStatus?: Order['paymentStatus']): Promise<{ success: boolean; message: string }> {
@@ -101,6 +228,7 @@ export async function updateOrderStatusAction(orderId: string, newStatus: Order[
 
      revalidatePath('/orders'); // Revalidate the list page
      revalidatePath(`/orders/${orderId}`); // Revalidate the detail page
+     revalidatePath('/'); // Revalidate dashboard
 
      return { success: true, message: "Order status updated successfully." };
    } catch (error) {
@@ -117,6 +245,7 @@ export async function updateOrderStatusAction(orderId: string, newStatus: Order[
 export async function cancelOrderAction(orderId: string): Promise<{ success: boolean; message: string }> {
    // Optional: Add logic here to check if the order *can* be cancelled (e.g., not already shipped/delivered)
    // Fetch the order first, check its status, then proceed or return an error.
+   // ** Note: This does NOT automatically restock inventory. That requires separate logic. **
    return updateOrderStatusAction(orderId, 'Cancelled', 'Refunded'); // Also update payment status to Refunded
 }
 
@@ -145,6 +274,7 @@ export async function linkShipmentToOrderAction(orderId: string, shipmentId: str
      revalidatePath(`/orders/${orderId}`);
      revalidatePath('/logistics'); // Revalidate logistics too if needed
      revalidatePath(`/logistics/${shipmentId}`);
+     revalidatePath('/'); // Revalidate dashboard
 
      return { success: true, message: "Shipment linked to order successfully." };
    } catch (error) {

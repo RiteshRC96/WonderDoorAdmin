@@ -1,12 +1,11 @@
 
-
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Image from 'next/image';
-import { ArrowLeft, Edit, Printer, Truck, Package, User, Calendar, Hash, DollarSign, Home, ChevronRight, AlertTriangle } from 'lucide-react'; // Added icons
+import { ArrowLeft, Edit, Printer, Truck, Package, User, Calendar, Hash, DollarSign, Home, ChevronRight, AlertTriangle, PlusCircle } from 'lucide-react'; // Added icons
 import Link from 'next/link';
 import { db, doc, getDoc, Timestamp } from '@/lib/firebase/firebase'; // Import Firestore functions
 import type { Order } from '@/schemas/order'; // Import Order type
@@ -47,9 +46,9 @@ async function getOrderDetails(orderId: string): Promise<{ order: Order | null; 
          ? data.updatedAt.toDate().toISOString()
          : undefined;
 
-      const orderData = {
+      const orderData: Order = {
         id: docSnap.id,
-        ...data,
+        ...(data as Order), // Assume data matches Order structure for simplicity here
         createdAt,
         updatedAt,
          items: data.items || [], // Ensure items array exists
@@ -132,9 +131,6 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
 
    // --- Calculation Note ---
    // We are now using the `total` directly from the Order object fetched from Firestore.
-   // The calculation logic resides in the `createOrderAction` or potentially an update action.
-   // For display purposes, we'll assume shipping/tax were included in the stored `total`.
-   // In a real app, you might store subtotal, tax, shipping separately for clarity.
    const displayTotal = order.total;
    // --- End Calculation Note ---
 
@@ -159,13 +155,22 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
            </Link>
          </Button>
          <div className="flex gap-2">
+            {/* Disabled Print Button */}
             <Button variant="outline" size="sm" disabled>
               <Printer className="mr-2 h-4 w-4" />
               Print Invoice (soon)
             </Button>
-           <Button size="sm" disabled>
-             <Edit className="mr-2 h-4 w-4" />
-             Edit Order (soon)
+            {/* Create Shipment Button (Placeholder) */}
+             <Button variant="outline" size="sm" disabled>
+               <PlusCircle className="mr-2 h-4 w-4" />
+               Create Shipment (soon)
+             </Button>
+           {/* Enabled Edit Button */}
+           <Button size="sm" asChild>
+             <Link href={`/orders/${order.id}/edit`}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit Order
+             </Link>
            </Button>
          </div>
        </div>
@@ -203,7 +208,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                 <div className="text-sm"><span className="text-muted-foreground">Payment Status:</span> <Badge variant={getStatusVariant(order.paymentStatus)}>{order.paymentStatus}</Badge></div>
                  <p className="text-sm"><span className="text-muted-foreground">Shipping Method:</span> {order.shippingMethod || 'N/A'}</p>
                  {order.shipmentId ? (
-                    <p className="text-sm"><span className="text-muted-foreground">Shipment:</span> <Link href={`/logistics/${order.shipmentId}`} className="text-primary hover:underline flex items-center gap-1"><Truck className="h-4 w-4"/>{order.shipmentId.substring(0,8)}...</Link></p>
+                     <p className="text-sm"><span className="text-muted-foreground">Shipment:</span> <Link href={`/logistics/${order.shipmentId}`} className="text-primary hover:underline flex items-center gap-1"><Truck className="h-4 w-4"/>{order.shipmentId.substring(0,8)}...</Link></p>
                  ) : (
                      <p className="text-sm italic text-muted-foreground">No shipment linked yet.</p>
                  )}
@@ -265,13 +270,6 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
          </CardContent>
        </Card>
 
-       {/* Potential Future Section: Order History/Timeline */}
-       {/* <Card>
-          <CardHeader><CardTitle>Order Timeline</CardTitle></CardHeader>
-          <CardContent>
-             <p className="text-muted-foreground">Order status updates and history will appear here.</p>
-          </CardContent>
-        </Card> */}
     </div>
   );
 }
@@ -280,10 +278,10 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
 export async function generateMetadata({ params }: { params: { orderId: string } }) {
   const { order } = await getOrderDetails(params.orderId);
   return {
-    title: order ? `Order #${order.id} | Showroom Manager` : 'Order Not Found | Showroom Manager',
+    title: order ? `Order #${order.id.substring(0,8)}... | Showroom Manager` : 'Order Not Found | Showroom Manager',
+    description: order ? `Details for order placed by ${order.customer.name}.` : 'View order details.',
   };
 }
 
 // Ensure dynamic rendering because data is fetched on each request
 export const dynamic = 'force-dynamic';
-
