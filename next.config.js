@@ -46,6 +46,12 @@ const nextConfig = {
          hostname: 'images.unsplash.com', // Add Unsplash hostname
          port: '',
          pathname: '/**',
+       },
+       {
+         protocol: 'https',
+         hostname: 'www.doors.com', // Add doors.com hostname
+         port: '',
+         pathname: '/**',
        }
     ],
   },
