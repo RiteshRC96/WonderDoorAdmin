@@ -1,13 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db, collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, getDoc, writeBatch, CollectionReference } from '@/lib/firebase/firebase';
+import { db, collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, getDoc, writeBatch } from '@/lib/firebase/firebase';
 import { OrderSchema, type CreateOrderInput, type Order, type OrderInput } from '@/schemas/order'; // Import Order types/schemas
 import type { AddItemInput } from '@/schemas/inventory'; // For fetching item details
 
 // --- HELPER FUNCTIONS (MAY NEED UPDATES) ---
 
-// Helper function to fetch current item details (including stock) - Keep as is for now, but verify field names
+// Helper function to fetch current item details (including stock)
 async function getInventoryItem(itemId: string): Promise<(AddItemInput & { id: string }) | null> {
     if (!db) return null;
     try {
@@ -85,6 +85,7 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
   const batch = writeBatch(db);
   let stockCheckFailed = false;
   let stockErrorMessage = "";
+    let itemsToRestock: { ref: any; quantity: number; name: string; itemId: string }[] = [];
 
   // --- PREPARE FIRESTORE DATA ---
   const ordersCollectionRef = collection(db, 'orders');
@@ -155,6 +156,7 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
           const newStock = inventoryItem.stock - item.quantity;
           const inventoryItemRef = doc(db, 'inventory', item.doorId);
           batch.update(inventoryItemRef, { stock: newStock, updatedAt: serverTimestamp() });
+           itemsToRestock.push({ ref: inventoryItemRef, quantity: item.quantity, name: item.name, itemId: inventoryItem.id });
           console.log(`Prepared stock update for item ${item.doorId}: ${inventoryItem.stock} -> ${newStock}`);
       }
 
@@ -185,6 +187,7 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
       firestoreOrderData.items.forEach(item => revalidatePath(`/inventory/${item.doorId}`)); // Revalidate specific item pages
       revalidatePath('/logistics'); // Revalidate logistics page
       revalidatePath('/'); // Revalidate dashboard
+        itemsToRestock.forEach(item => revalidatePath(`/inventory/${item.itemId}`));
 
       return {
         success: true,
