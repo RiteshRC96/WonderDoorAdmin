@@ -20,6 +20,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"; // Import Breadcrumb
+import { OrderStatusUpdater } from "@/components/orders/order-status-updater"; // Import the new component
 
 // Function to fetch a single order's details from Firestore
 async function getOrderDetails(orderId: string): Promise<{ order: Order | null; error?: string }> {
@@ -188,7 +189,8 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                     </CardDescription>
                 )}
              </div>
-              <Badge variant={getStatusVariant(order.status)} className="text-base md:text-lg px-3 py-1 md:px-4 md:py-1.5 whitespace-nowrap shrink-0">{order.status}</Badge>
+              {/* Status Badge Removed - Handled by OrderStatusUpdater now */}
+              {/* <Badge variant={getStatusVariant(order.status)} className="text-base md:text-lg px-3 py-1 md:px-4 md:py-1.5 whitespace-nowrap shrink-0">{order.status}</Badge> */}
           </CardHeader>
           <Separator />
           <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
@@ -224,6 +226,9 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
              </div>
           </CardContent>
        </Card>
+
+        {/* Order Status Updater Card */}
+        <OrderStatusUpdater orderId={order.id} currentStatus={order.status} />
 
         <Card className="shadow-md">
          <CardHeader>
@@ -285,3 +290,4 @@ export async function generateMetadata({ params }: { params: { orderId: string }
 
 // Ensure dynamic rendering because data is fetched on each request
 export const dynamic = 'force-dynamic';
+

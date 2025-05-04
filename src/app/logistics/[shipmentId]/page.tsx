@@ -18,6 +18,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"; // Import Breadcrumb
+import { ShipmentStatusUpdater } from "@/components/logistics/shipment-status-updater"; // Import the new component
 
 // Function to fetch a single shipment's details from Firestore
 async function getShipmentDetails(shipmentId: string): Promise<{ shipment: Shipment | null; error?: string }> {
@@ -164,10 +165,11 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
                   <Navigation className="mr-2 h-4 w-4" />
                   Track Externally (soon)
               </Button>
-             <Button size="sm" disabled>
+             {/* Edit button removed - status is updated via ShipmentStatusUpdater */}
+             {/* <Button size="sm" disabled>
                  <Edit className="mr-2 h-4 w-4" />
                  Update Shipment (soon)
-             </Button>
+             </Button> */}
           </div>
        </div>
 
@@ -187,7 +189,8 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
                     </CardDescription>
                  )}
             </div>
-            <Badge variant={getShipmentStatusVariant(shipment.status)} className="text-base md:text-lg px-3 py-1 md:px-4 md:py-1.5 whitespace-nowrap shrink-0">{shipment.status}</Badge>
+            {/* Status Badge Removed - Handled by ShipmentStatusUpdater */}
+            {/* <Badge variant={getShipmentStatusVariant(shipment.status)} className="text-base md:text-lg px-3 py-1 md:px-4 md:py-1.5 whitespace-nowrap shrink-0">{shipment.status}</Badge> */}
          </CardHeader>
           <Separator />
           <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
@@ -225,6 +228,8 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
           </CardContent>
        </Card>
 
+       {/* Shipment Status Updater Card */}
+       <ShipmentStatusUpdater shipmentId={shipment.id} currentStatus={shipment.status} />
 
        <Card className="shadow-md">
          <CardHeader>
