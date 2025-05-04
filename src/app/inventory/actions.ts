@@ -9,7 +9,8 @@ function checkFirestoreInitialization() {
   if (!db) {
     const errorMessage = "Firestore database is not initialized. Check Firebase configuration. Operation cannot proceed.";
     console.error(errorMessage);
-    return { initialized: false, message: "Database configuration error. Unable to proceed." };
+    // Provide a user-friendly message emphasizing configuration check
+    return { initialized: false, message: "Database configuration error. Please check setup and restart." };
   }
   return { initialized: true, message: "" };
 }
@@ -47,21 +48,22 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
   };
 
   // Remove empty/undefined optional fields before sending to Firestore
-  // Ensure imageUrl is truly removed if it's an empty string or undefined
    Object.keys(newItemData).forEach(key => {
       const typedKey = key as keyof typeof newItemData;
       if (newItemData[typedKey] === undefined || newItemData[typedKey] === "") {
-           // Special check for imageUrl to ensure undefined is used if empty
           if (typedKey === 'imageUrl') {
+              // Use delete to ensure the field is completely removed if empty/undefined
               delete newItemData.imageUrl;
-          } else if (newItemData[typedKey] === "") { // Delete other empty strings if needed
+          } else {
+             // For other potentially empty fields, decide if they should be removed or sent as empty string
+             // For now, let's remove them if undefined/empty string
              delete newItemData[typedKey];
           }
       }
     });
 
   try {
-    console.log("Attempting to add item to Firestore...");
+    console.log("Attempting to add item to Firestore with data:", JSON.stringify(Object.keys(newItemData))); // Log keys to avoid logging potentially large image data
     const inventoryCollectionRef = collection(db, 'inventory');
     const docRef = await addDoc(inventoryCollectionRef, newItemData);
 
@@ -69,6 +71,7 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
 
     // Revalidate the inventory list page cache to show the new item
     revalidatePath('/inventory');
+    revalidatePath('/'); // Also revalidate dashboard
 
     return {
       success: true,
@@ -77,19 +80,54 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
     };
 
   } catch (error) {
-     const errorMessage = `Error adding item to Firestore: ${error instanceof Error ? error.message : String(error)}`;
-    console.error(errorMessage);
-    // Check for large data URL error (Firestore has document size limits)
-    if (errorMessage.includes('ENTITY_TOO_LARGE') || errorMessage.includes('maximum size')) {
-        return {
-          success: false,
-          message: "Failed to add item. The image file might be too large. Please use a smaller image (e.g., under 1MB).",
-          errors: null,
-        };
+     // --- Enhanced Error Logging ---
+     let errorMessage = "Failed to add item due to a database error.";
+     let errorCode = "UNKNOWN"; // Default error code
+
+     if (error instanceof Error) {
+         // Attempt to get a more specific Firestore error code if available
+         const firestoreError = error as any; // Cast to any to check for 'code' property
+         if (firestoreError.code) {
+            errorCode = firestoreError.code;
+            switch (firestoreError.code) {
+                case 'permission-denied':
+                    errorMessage = "Permission denied. Check Firestore security rules.";
+                    break;
+                case 'unauthenticated':
+                     errorMessage = "Authentication required. Please log in.";
+                     break;
+                 case 'resource-exhausted':
+                     errorMessage = "Firestore quota exceeded. Please check your Firebase plan limits.";
+                     break;
+                 case 'invalid-argument':
+                     errorMessage = `Invalid data provided to Firestore: ${firestoreError.message}`;
+                     break;
+                 default:
+                     errorMessage = `Firestore error (${firestoreError.code}): ${firestoreError.message}`;
+                     break;
+             }
+             console.error(`Firestore Error (${firestoreError.code}):`, error);
+         } else {
+            // Generic JavaScript error
+            errorMessage = `Error adding item: ${error.message}`;
+            console.error("Error adding item to Firestore:", error);
+         }
+     } else {
+        // Non-Error object thrown
+        console.error("An unexpected error occurred:", error);
+     }
+
+    // Check for large data URL error specifically
+    if (error instanceof Error && (error.message.includes('ENTITY_TOO_LARGE') || error.message.includes('maximum size'))) {
+        errorMessage = "Failed to add item. The image file might be too large. Please use a smaller image (e.g., under 1MB).";
+        errorCode = "ENTITY_TOO_LARGE";
     }
+
+    // Return the more specific or generic error message
     return {
       success: false,
-      message: "Failed to add item due to a database error. Please try again.",
+      // Provide a user-friendly message, maybe add the code for easier debugging for devs
+      message: `${errorMessage} (Code: ${errorCode}). Please try again.`,
       errors: null,
     };
   }
@@ -135,12 +173,9 @@ export async function updateItemAction(
    Object.keys(itemDataToUpdate).forEach(key => {
         const typedKey = key as keyof typeof itemDataToUpdate;
         if (itemDataToUpdate[typedKey] === undefined || itemDataToUpdate[typedKey] === "") {
-            // Special check for imageUrl to ensure undefined is used if empty
            if (typedKey === 'imageUrl') {
-               // If imageUrl is empty string, we want to remove it using `delete`
-               // If it's already undefined, delete won't hurt
                delete itemDataToUpdate.imageUrl;
-           } else if (itemDataToUpdate[typedKey] === "") { // Delete other empty strings if needed
+           } else {
               delete itemDataToUpdate[typedKey];
            }
         }
@@ -157,6 +192,8 @@ export async function updateItemAction(
     revalidatePath('/inventory');
     revalidatePath(`/inventory/${itemId}`);
     revalidatePath(`/inventory/${itemId}/edit`);
+    revalidatePath('/'); // Revalidate dashboard
+
 
     return {
       success: true,
@@ -164,19 +201,50 @@ export async function updateItemAction(
     };
 
   } catch (error) {
-    const errorMessage = `Error updating item in Firestore (ID: ${itemId}): ${error instanceof Error ? error.message : String(error)}`;
-    console.error(errorMessage);
-    // Check for large data URL error during update
-    if (errorMessage.includes('ENTITY_TOO_LARGE') || errorMessage.includes('maximum size')) {
-       return {
-         success: false,
-         message: "Failed to update item. The image data might be too large. Please use a smaller image or URL.",
-         errors: null,
-       };
+    // --- Enhanced Error Logging ---
+    let errorMessage = "Failed to update item due to a database error.";
+    let errorCode = "UNKNOWN";
+
+    if (error instanceof Error) {
+        const firestoreError = error as any;
+        if (firestoreError.code) {
+            errorCode = firestoreError.code;
+             switch (firestoreError.code) {
+                case 'permission-denied':
+                    errorMessage = "Permission denied. Check Firestore security rules.";
+                    break;
+                case 'unauthenticated':
+                     errorMessage = "Authentication required. Please log in.";
+                     break;
+                case 'not-found':
+                     errorMessage = `Item with ID ${itemId} not found. Cannot update.`;
+                     break;
+                 case 'resource-exhausted':
+                     errorMessage = "Firestore quota exceeded. Please check your Firebase plan limits.";
+                     break;
+                 case 'invalid-argument':
+                     errorMessage = `Invalid data provided for update: ${firestoreError.message}`;
+                     break;
+                 default:
+                     errorMessage = `Firestore error (${firestoreError.code}): ${firestoreError.message}`;
+                     break;
+             }
+            console.error(`Firestore Error during update (${firestoreError.code}):`, error);
+        } else {
+            errorMessage = `Error updating item: ${error.message}`;
+            console.error("Error updating item in Firestore:", error);
+        }
+    } else {
+        console.error("An unexpected error occurred during update:", error);
+    }
+
+    if (error instanceof Error && (error.message.includes('ENTITY_TOO_LARGE') || error.message.includes('maximum size'))) {
+       errorMessage = "Failed to update item. The image data might be too large. Please use a smaller image or URL.";
+       errorCode = "ENTITY_TOO_LARGE";
      }
     return {
       success: false,
-      message: "Failed to update item due to a database error. Please try again.",
+      message: `${errorMessage} (Code: ${errorCode}). Please try again.`,
       errors: null,
     };
   }
@@ -205,16 +273,47 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
 
     revalidatePath('/inventory');
     revalidatePath(`/inventory/${itemId}`);
+    revalidatePath('/'); // Revalidate dashboard
      // No need to revalidate edit page as it won't exist anymore
 
     return { success: true, message: "Item deleted successfully." };
 
   } catch (error) {
-    const errorMessage = `Error deleting item from Firestore (ID: ${itemId}): ${error instanceof Error ? error.message : String(error)}`;
-    console.error(errorMessage);
+    // --- Enhanced Error Logging ---
+    let errorMessage = "Failed to delete item due to a database error.";
+    let errorCode = "UNKNOWN";
+
+     if (error instanceof Error) {
+         const firestoreError = error as any;
+         if (firestoreError.code) {
+            errorCode = firestoreError.code;
+             switch (firestoreError.code) {
+                case 'permission-denied':
+                    errorMessage = "Permission denied. Check Firestore security rules.";
+                    break;
+                case 'unauthenticated':
+                     errorMessage = "Authentication required. Please log in.";
+                     break;
+                case 'not-found':
+                     // Arguably should be success if it's already gone, but let's report it
+                     errorMessage = `Item with ID ${itemId} not found. Cannot delete.`;
+                     break;
+                 default:
+                     errorMessage = `Firestore error (${firestoreError.code}): ${firestoreError.message}`;
+                     break;
+             }
+            console.error(`Firestore Error during delete (${firestoreError.code}):`, error);
+         } else {
+            errorMessage = `Error deleting item: ${error.message}`;
+            console.error("Error deleting item from Firestore:", error);
+         }
+     } else {
+        console.error("An unexpected error occurred during delete:", error);
+     }
+
     return {
       success: false,
-      message: "Failed to delete item due to a database error. Please try again.",
+      message: `${errorMessage} (Code: ${errorCode}). Please try again.`,
     };
   }
 }
