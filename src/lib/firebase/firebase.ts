@@ -1,3 +1,4 @@
+
 // src/lib/firebase/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import {
@@ -15,6 +16,8 @@ import {
     updateDoc, // Import updateDoc for actions
     arrayUnion, // Import arrayUnion for actions
     where, // Import where for actions
+    limit, // Import limit for queries
+    getCountFromServer, // Import getCountFromServer for aggregate queries
     type Firestore
 } from 'firebase/firestore';
 // Import getAnalytics if needed, based on config
@@ -88,4 +91,6 @@ export {
     updateDoc, // Export updateDoc
     arrayUnion, // Export arrayUnion
     where, // Export where
+    limit, // Export limit
+    getCountFromServer, // Export getCountFromServer
 };
