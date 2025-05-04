@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -25,9 +24,9 @@ import { Badge } from "@/components/ui/badge"; // Import Badge
 import { cn } from "@/lib/utils"; // Import cn utility
 
 // Expect timestamps as strings (ISO format) from the Server Component
-interface InventoryItem extends Omit<AddItemInput, 'createdAt'> { // Omit potential createdAt from schema if it exists
+interface InventoryItem extends Omit<AddItemInput, 'createdAt' | 'updatedAt'> {
   id: string;
-  createdAt?: string; // Expecting ISO string
+  createdAt?: string; // Expecting ISO string or undefined
   updatedAt?: string; // Expecting ISO string or undefined
 }
 
@@ -38,11 +37,12 @@ interface InventoryItemCardProps {
 export function InventoryItemCard({ item }: InventoryItemCardProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = React.useState(false); // State to control dialog visibility
+
   const isLowStock = item.stock < 10;
 
   const handleDelete = async (event: React.MouseEvent) => {
-    event.preventDefault(); // Prevent link navigation when clicking delete
-    event.stopPropagation(); // Stop event bubbling
+    // No need for event prevention here, happens within dialog action
     setIsDeleting(true);
     try {
       const result = await deleteItemAction(item.id);
@@ -52,12 +52,15 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
           description: result.message,
         });
         // Revalidation is handled by the action, no need to refresh here
+        setIsAlertDialogOpen(false); // Close dialog on success
       } else {
         toast({
           variant: "destructive",
           title: "Error",
           description: result.message,
         });
+         // Keep dialog open on error? Or close? Closing for now.
+         // setIsAlertDialogOpen(false);
       }
     } catch (error) {
       console.error("Delete item error:", error);
@@ -66,8 +69,11 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
         title: "Error",
         description: "An unexpected error occurred while deleting the item.",
       });
+       // Keep dialog open on error? Or close? Closing for now.
+       // setIsAlertDialogOpen(false);
     } finally {
       setIsDeleting(false);
+      // Dialog closing is handled by success or cancel/action buttons
     }
   };
 
@@ -79,10 +85,12 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
             <Image
               src={item.imageUrl || `https://picsum.photos/seed/${item.id}/400/300`} // Fallback image
               alt={item.name}
-              layout="fill"
-              objectFit="cover"
+              fill={true} // Use fill instead of layout="fill"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Provide sizes prop for fill
+              style={{ objectFit: 'cover' }} // Use style for objectFit
               data-ai-hint={item.imageHint || 'product item'}
               className="transition-transform duration-300 ease-in-out group-hover:scale-105 bg-white" // Added bg-white for placeholder
+              priority={false} // Consider setting priority based on position (e.g., true for first few items)
             />
             {/* Overlay for View Details button */}
              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -111,7 +119,8 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
        {/* Footer: Price and Delete Button */}
        <CardFooter className="p-4 pt-2 flex justify-between items-center border-t mt-auto"> {/* Added border-t and mt-auto */}
            <p className="text-xl font-bold text-primary">${item.price?.toFixed(2) || 'N/A'}</p>
-         <AlertDialog>
+           {/* Control AlertDialog visibility with state */}
+         <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
            <AlertDialogTrigger asChild>
               <Button
                  variant="ghost"
@@ -120,11 +129,16 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
                     "text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-8 w-8 rounded-full", // Rounded icon button
                     isDeleting && "text-destructive" // Keep icon red while deleting
                  )}
-                 disabled={isDeleting}
+                 disabled={isDeleting} // Disable trigger while deleting
                  aria-label="Delete item"
-                 onClick={(e) => { e.stopPropagation(); }} // Prevent link navigation
+                 onClick={(e) => {
+                     e.preventDefault(); // Prevent link navigation when clicking the button itself
+                     e.stopPropagation();
+                     setIsAlertDialogOpen(true); // Manually open dialog
+                 }}
                >
-                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                 {/* Show loader only when actually deleting inside the dialog */}
+                 <Trash2 className="h-4 w-4" />
                </Button>
            </AlertDialogTrigger>
            <AlertDialogContent>
@@ -136,7 +150,11 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
                </AlertDialogDescription>
              </AlertDialogHeader>
              <AlertDialogFooter>
-               <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                {/* Ensure Cancel button closes the dialog */}
+               <AlertDialogCancel onClick={() => setIsAlertDialogOpen(false)} disabled={isDeleting}>
+                    Cancel
+                </AlertDialogCancel>
+                {/* Action button performs delete and handles loading state */}
                <AlertDialogAction
                  onClick={handleDelete}
                  disabled={isDeleting}
