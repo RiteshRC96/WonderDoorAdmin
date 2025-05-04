@@ -50,8 +50,8 @@ export default function LoginPage() {
           title: "Login Successful",
           description: "Redirecting to dashboard...",
         });
-        // Refresh the current route. Middleware will detect the cookie and redirect.
-        router.refresh();
+        // Explicitly redirect to the dashboard page
+        router.push('/');
       } else {
         toast({
           variant: "destructive",
