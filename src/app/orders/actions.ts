@@ -1,11 +1,10 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { db, collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, getDoc, writeBatch, CollectionReference } from '@/lib/firebase/firebase';
 import { OrderSchema, type CreateOrderInput, type Order, type OrderInput } from '@/schemas/order'; // Import Order types/schemas
-import { ShipmentSchema, type ShipmentInput } from '@/schemas/shipment'; // Import Shipment schema for initial status
-import type { AddItemInput } from '@/schemas/inventory'; // For fetching item details
+import { ShipmentSchema, type ShipmentInput, type Shipment } from '@/schemas/shipment'; // Import Shipment schema/type for initial status and potential updates
+import { AddItemSchema, type AddItemInput } from '@/schemas/inventory'; // For fetching item details
 
 // Helper function to fetch current item details (including stock) - Keep as is
 async function getInventoryItem(itemId: string): Promise<(AddItemInput & { id: string }) | null> {
@@ -15,20 +14,17 @@ async function getInventoryItem(itemId: string): Promise<(AddItemInput & { id: s
         const docSnap = await getDoc(itemDocRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
-            const validatedData = AddItemSchema.partial().safeParse(data);
+            // Use AddItemSchema for validation and coercion AFTER fetching
+            const validatedData = AddItemSchema.safeParse(data);
             if (validatedData.success) {
-                // Ensure stock and price are numbers, default to 0 if not
-                const stock = typeof validatedData.data.stock === 'number' ? validatedData.data.stock : 0;
-                const price = typeof validatedData.data.price === 'number' ? validatedData.data.price : 0;
+                // Use validated data which includes coercion and defaults
                 return {
                     id: docSnap.id,
-                    ...(validatedData.data as AddItemInput),
-                    stock, // Use validated/defaulted number
-                    price, // Use validated/defaulted number
+                    ...validatedData.data, // Spread the successfully parsed and coerced data
                  };
             } else {
                 console.warn(`Inventory item ${itemId} data validation failed:`, validatedData.error);
-                 // Attempt to return with defaults for critical fields if validation fails
+                 // Fallback: Attempt to return raw data but ensure critical fields are numbers
                  const stock = typeof data?.stock === 'number' ? data.stock : 0;
                  const price = typeof data?.price === 'number' ? data.price : 0;
                 return { id: docSnap.id, ...(data as AddItemInput), stock, price };
@@ -79,10 +75,10 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
   const newOrderRef = doc(ordersCollectionRef); // Generate ref to get ID
 
   // 2. Prepare Shipment Document Reference and Data
-  const shipmentsCollectionRef = collection(db, 'shipments') as CollectionReference<ShipmentInput>; // Type assertion
+  const shipmentsCollectionRef = collection(db, 'shipments'); // No type assertion needed here
   const newShipmentRef = doc(shipmentsCollectionRef); // Generate ref for shipment
 
-  const initialShipmentStatus = 'Label Created'; // Set initial shipment status
+  const initialShipmentStatus = 'Processing'; // Set initial shipment status to Processing
   const initialHistoryEvent = {
       timestamp: now.toDate().toISOString(), // Use consistent timestamp
       status: initialShipmentStatus,
@@ -90,26 +86,33 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
       notes: 'Shipment record automatically created.',
   };
 
-  const newShipmentData: ShipmentInput & { createdAt: Timestamp, updatedAt: Timestamp, history: typeof initialHistoryEvent[], actualDelivery: null } = {
-      orderId: newOrderRef.id, // Use the generated order ID
-      customerName: validatedOrderData.customer.name,
-      carrier: 'TBD', // Default carrier, to be updated later
-      trackingNumber: 'Pending', // Default tracking, update when available
-      status: initialShipmentStatus,
-      origin: 'Warehouse', // Default origin, adjust as needed
-      destination: validatedOrderData.customer.address, // Use customer address
-      estimatedDelivery: '', // Can be set later
-      pieces: validatedOrderData.items.reduce((sum, item) => sum + item.quantity, 0), // Calculate total pieces
-      // Optional fields, can be added later
-      weight: '',
-      dimensions: '',
-      notes: 'Auto-generated shipment record.',
-      // Add timestamps and history for the new shipment document
-      createdAt: now,
-      updatedAt: now,
-      history: [initialHistoryEvent],
-      actualDelivery: null, // Set explicitly to null
-  };
+
+  // Ensure the structure matches ShipmentInput before adding timestamps etc.
+  const shipmentInputData: ShipmentInput = {
+       orderId: newOrderRef.id, // Use the generated order ID
+       customerName: validatedOrderData.customer.name,
+       carrier: 'TBD', // Default carrier, to be updated later
+       trackingNumber: 'Pending', // Default tracking, update when available
+       status: initialShipmentStatus,
+       origin: 'Warehouse', // Default origin, adjust as needed
+       destination: validatedOrderData.customer.address, // Use customer address
+       estimatedDelivery: '', // Can be set later
+       pieces: validatedOrderData.items.reduce((sum, item) => sum + item.quantity, 0), // Calculate total pieces
+       // Optional fields, can be added later
+       weight: '',
+       dimensions: '',
+       notes: 'Auto-generated shipment record.',
+   };
+
+   // Now add the Firestore specific fields
+   const newShipmentData = {
+        ...shipmentInputData,
+        createdAt: now,
+        updatedAt: now,
+        history: [initialHistoryEvent],
+        actualDelivery: null, // Set explicitly to null
+    };
+
 
   // 3. Prepare Final Order Data (including the new shipmentId)
   const finalOrderData = {
@@ -123,19 +126,21 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
 
   // 4. Perform Stock Check and Prepare Inventory Updates for Batch
   try {
-      for (const item of finalOrderData.items) {
-          const inventoryItem = await getInventoryItem(item.itemId); // Fetch item data
+      for (const item of finalOrderData.items) { // item comes from validated input data
+          const inventoryItem = await getInventoryItem(item.itemId); // Fetch current item data
 
           if (!inventoryItem) {
               stockCheckFailed = true;
-              stockErrorMessage = `Inventory item ${item.name} (ID: ${item.itemId}) not found.`;
+              // More robust error message, avoids relying on potentially problematic item.name
+              stockErrorMessage = `Inventory item with ID ${item.itemId} not found in database. Order cannot proceed.`;
+              console.error(stockErrorMessage); // Log the error server-side
               break;
           }
 
-          const currentStock = inventoryItem.stock;
-          if (typeof currentStock !== 'number' || currentStock < item.quantity) {
+          const currentStock = inventoryItem.stock; // Already validated as number by getInventoryItem logic
+          if (currentStock < item.quantity) {
               stockCheckFailed = true;
-              stockErrorMessage = `Insufficient stock for ${item.name}. Available: ${currentStock ?? 'N/A'}, Ordered: ${item.quantity}.`;
+              stockErrorMessage = `Insufficient stock for ${item.name} (ID: ${item.itemId}). Available: ${currentStock}, Ordered: ${item.quantity}.`;
               break;
           }
 
@@ -192,7 +197,7 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
 }
 
 // --- Update Order Action ---
-// No changes needed here unless edit should also affect shipments (complex)
+// Handles editing an existing order. Does NOT currently adjust stock automatically.
 export async function updateOrderAction(
   orderId: string,
   data: OrderInput
@@ -216,12 +221,12 @@ export async function updateOrderAction(
     };
   }
 
-  console.warn(`Updating order ${orderId}. Inventory stock levels are NOT automatically adjusted by this edit action.`);
+  console.warn(`Updating order ${orderId}. Inventory stock levels are NOT automatically adjusted by this edit action. Manual adjustment may be needed.`);
 
   const orderDataToUpdate = {
     ...validationResult.data,
     updatedAt: serverTimestamp(), // Update the timestamp
-    total: calculateOrderTotal(validationResult.data.items), // Recalculate total
+    total: calculateOrderTotal(validationResult.data.items), // Recalculate total based on potentially edited items
   };
 
   try {
@@ -238,7 +243,7 @@ export async function updateOrderAction(
 
     return {
       success: true,
-      message: `Order '${orderId}' updated successfully! Remember to manually adjust stock if items changed.`,
+      message: `Order '${orderId}' updated successfully! Remember to manually adjust stock if items changed significantly.`,
     };
 
   } catch (error) {
@@ -254,7 +259,7 @@ export async function updateOrderAction(
 
 
 // --- Update Order Status Action ---
-// Potentially update linked shipment status if order is cancelled? (Optional)
+// Updates only the order status and payment status.
 export async function updateOrderStatusAction(orderId: string, newStatus: Order['status'], newPaymentStatus?: Order['paymentStatus']): Promise<{ success: boolean; message: string }> {
    if (!db) {
      const errorMessage = "Database configuration error. Unable to update order status.";
@@ -288,20 +293,42 @@ export async function updateOrderStatusAction(orderId: string, newStatus: Order[
      await updateDoc(orderDocRef, updateData);
      console.log(`Successfully updated status for order ID: ${orderId}`);
 
+     // If status is now 'Shipped', update the linked shipment if not already shipped/delivered/exception
+     if (newStatus === 'Shipped') {
+        const orderSnap = await getDoc(orderDocRef);
+        if (orderSnap.exists()) {
+            const orderData = orderSnap.data() as Order;
+            if (orderData.shipmentId) {
+                 const shipmentDocRef = doc(db, 'shipments', orderData.shipmentId);
+                 const shipmentSnap = await getDoc(shipmentDocRef);
+                 if (shipmentSnap.exists()) {
+                     const shipmentData = shipmentSnap.data() as Shipment;
+                     // Only update shipment status if it's still in a pre-shipped state
+                     if (['Processing', 'Label Created'].includes(shipmentData.status)) {
+                        const { updateShipmentStatusAction: updateLinkedShipmentStatus } = await import('@/app/logistics/actions');
+                        await updateLinkedShipmentStatus(orderData.shipmentId, 'Picked Up'); // Or 'In Transit' depending on workflow
+                        console.log(`Updated linked shipment ${orderData.shipmentId} status to Picked Up.`);
+                     }
+                 }
+            }
+        }
+     }
+
      revalidatePath('/orders');
      revalidatePath(`/orders/${orderId}`);
-     revalidatePath('/');
+     revalidatePath('/'); // Revalidate dashboard
+     // Revalidate logistics if shipment was potentially updated
+     if (newStatus === 'Shipped') {
+          const orderSnap = await getDoc(orderDocRef);
+          if (orderSnap.exists()) {
+              const orderData = orderSnap.data() as Order;
+              if (orderData.shipmentId) {
+                  revalidatePath('/logistics');
+                  revalidatePath(`/logistics/${orderData.shipmentId}`);
+              }
+          }
+      }
 
-     // If order is cancelled, potentially update linked shipment status too (optional complexity)
-     // if (newStatus === 'Cancelled') {
-     //   const orderSnap = await getDoc(orderDocRef);
-     //   if (orderSnap.exists()) {
-     //     const orderData = orderSnap.data() as Order;
-     //     if (orderData.shipmentId) {
-     //       // Import and call shipment update action
-     //     }
-     //   }
-     // }
 
      return { success: true, message: "Order status updated successfully." };
    } catch (error) {
@@ -315,7 +342,8 @@ export async function updateOrderStatusAction(orderId: string, newStatus: Order[
 }
 
 // --- Cancel Order Action (Includes Inventory Restock) ---
-// Potentially update linked shipment status to 'Cancelled' or similar (Optional)
+// Cancels the order, sets payment to Refunded, and attempts to restock inventory.
+// Optionally updates linked shipment status.
 export async function cancelOrderAction(orderId: string): Promise<{ success: boolean; message: string }> {
     if (!db) {
         const errorMessage = "Database configuration error. Unable to cancel order.";
@@ -344,6 +372,7 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
         const orderData = orderSnap.data() as Order;
         shipmentIdToUpdate = orderData.shipmentId; // Get shipment ID if it exists
 
+        // Prevent cancellation if already shipped or delivered
         if (['Shipped', 'Delivered'].includes(orderData.status)) {
             return { success: false, message: `Cannot cancel order that is already ${orderData.status}. Consider a return/refund process instead.` };
         }
@@ -354,11 +383,11 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
         // Prepare to update order status
         batch.update(orderDocRef, {
             status: 'Cancelled',
-            paymentStatus: 'Refunded',
+            paymentStatus: 'Refunded', // Assume refund is processed on cancellation
             updatedAt: serverTimestamp(),
         });
 
-        // Prepare to restock inventory items (Ensure getInventoryItem handles potential missing data)
+        // Prepare to restock inventory items
          for (const item of orderData.items) {
              const inventoryItem = await getInventoryItem(item.itemId); // Fetch current item data
 
@@ -368,13 +397,8 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
                  continue; // Skip if item doesn't exist
              }
 
-             const currentStock = inventoryItem.stock;
-             if (typeof currentStock !== 'number') {
-                 console.error(`Invalid stock value for item ${item.itemId} during restock:`, currentStock, ". Skipping restock for this item.");
-                 restockSkippedCount++;
-                 restockError = true;
-                 continue;
-             }
+             const currentStock = inventoryItem.stock; // Already validated as number
+             // No need to check typeof currentStock !== 'number' due to getInventoryItem logic
 
              const newStock = currentStock + item.quantity;
              const inventoryItemRef = doc(db, 'inventory', item.itemId);
@@ -387,14 +411,22 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
          // Optional: Update linked shipment status if order is cancelled before shipping
          if (shipmentIdToUpdate) {
              const shipmentDocRef = doc(db, 'shipments', shipmentIdToUpdate);
-             // You might want to check the current shipment status before overriding it
-             console.log(`Marking linked shipment ${shipmentIdToUpdate} as Exception (due to order cancellation).`);
-             batch.update(shipmentDocRef, {
-                 status: 'Exception', // Or a dedicated 'Cancelled' status if you add it to ShipmentSchema
-                 notes: `Order ${orderId} cancelled.`,
-                 updatedAt: serverTimestamp(),
-                 // Optionally add a history event here too
-             });
+             const shipmentSnap = await getDoc(shipmentDocRef); // Check current status
+             if (shipmentSnap.exists()) {
+                 const shipmentData = shipmentSnap.data() as Shipment;
+                 // Only cancel shipment if it hasn't already progressed far
+                 if (['Processing', 'Label Created'].includes(shipmentData.status)) {
+                     console.log(`Marking linked shipment ${shipmentIdToUpdate} as Exception (due to order cancellation).`);
+                     batch.update(shipmentDocRef, {
+                         status: 'Exception', // Or a dedicated 'Cancelled' status if you add it to ShipmentSchema
+                         notes: `Shipment cancelled - Order ${orderId} cancelled.`,
+                         updatedAt: serverTimestamp(),
+                         // Optionally add a history event here too using arrayUnion in a separate update if needed after batch commit
+                     });
+                 } else {
+                     console.log(`Shipment ${shipmentIdToUpdate} has already progressed (${shipmentData.status}), not changing status due to order cancellation.`);
+                 }
+             }
          }
 
 
@@ -402,7 +434,7 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
         console.log(`Successfully processed cancellation for order ${orderId}.`);
          if (itemsToRestock.length > 0) console.log(`Updated stock for ${itemsToRestock.length} item types.`);
          if (restockSkippedCount > 0) console.warn(`Skipped restocking for ${restockSkippedCount} item types.`);
-         if (shipmentIdToUpdate) console.log(`Updated status for linked shipment ${shipmentIdToUpdate}.`);
+         if (shipmentIdToUpdate) console.log(`Status update attempted for linked shipment ${shipmentIdToUpdate}.`);
 
         // Revalidate paths
         revalidatePath('/orders');
@@ -418,7 +450,7 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
         let successMessage = "Order cancelled successfully.";
         if (itemsToRestock.length > 0) successMessage += " Inventory restocked.";
         if (restockSkippedCount > 0) successMessage += ` Skipped restock for ${restockSkippedCount} item(s). Check logs.`;
-         if (shipmentIdToUpdate) successMessage += ` Linked shipment status updated.`;
+         if (shipmentIdToUpdate) successMessage += ` Linked shipment status updated if applicable.`;
 
         return { success: true, message: successMessage };
 
@@ -433,8 +465,8 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
 }
 
 
-// Action to link a shipment ID to an order (if needed manually, though now automated)
-// Keep this action in case manual linking is required for edge cases.
+// Action to link a shipment ID to an order (if needed manually)
+// Kept for edge cases or manual intervention needs.
 export async function linkShipmentToOrderAction(orderId: string, shipmentId: string): Promise<{ success: boolean; message: string }> {
    if (!db) {
      const errorMessage = "Database configuration error. Unable to link shipment.";
@@ -451,9 +483,8 @@ export async function linkShipmentToOrderAction(orderId: string, shipmentId: str
      await updateDoc(orderDocRef, {
        shipmentId: shipmentId,
        updatedAt: Timestamp.now(),
-       // Consider if status should change here too. If shipment is created,
-       // order status is usually 'Processing' or already 'Shipped'.
-       // status: 'Shipped', // Avoid automatic status change on manual link?
+       // Avoid automatic status change on manual link, as the reason might vary.
+       // status: 'Shipped',
      });
      console.log(`Successfully manually linked shipment to order.`);
 
@@ -473,4 +504,3 @@ export async function linkShipmentToOrderAction(orderId: string, shipmentId: str
      };
    }
 }
-
