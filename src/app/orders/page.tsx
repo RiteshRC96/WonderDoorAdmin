@@ -18,14 +18,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/firebase/firebase';
-import type { Order } from '@/schemas/order';
-import { OrderSchema } from '@/schemas/order';
+import type { Order, OrderItemSchema, ShippingInfoSchema, PaymentInfoSchema, TrackingInfoSchema } from '@/schemas/order'; // Import updated Order type
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton
 
-// Function to fetch orders from Firestore (can be called from client or server)
+// Function to fetch orders from Firestore based on the new structure
 async function getOrders(): Promise<{ orders: Order[]; error?: string }> {
   if (!db) {
     const errorMessage = "Firestore database is not initialized. Cannot fetch orders. Please check Firebase configuration.";
@@ -34,31 +33,57 @@ async function getOrders(): Promise<{ orders: Order[]; error?: string }> {
   }
 
   try {
-    console.log("Attempting to fetch orders from Firestore...");
+    console.log("Attempting to fetch orders from Firestore (new structure)...");
     const ordersCollectionRef = collection(db, 'orders');
-    const q = query(ordersCollectionRef, orderBy('createdAt', 'desc'));
+    // Assuming 'orderDate' is the field to sort by, descending
+    const q = query(ordersCollectionRef, orderBy('orderDate', 'desc'));
     const querySnapshot = await getDocs(q);
 
     const orders: Order[] = [];
     querySnapshot.forEach((doc) => {
-      const data = doc.data() as Omit<Order, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
-      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString();
-      const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
-      orders.push({
+      const data = doc.data();
+
+      // Map Firestore data to the Order interface
+      const orderData: Order = {
         id: doc.id,
-        ...data,
-        createdAt,
-        updatedAt,
-        items: data.items || [],
-        total: typeof data.total === 'number' ? data.total : 0,
-      });
+        items: (data.items || []).map((item: any) => ({ // Map items explicitly
+             cartItemId: item.cartItemId,
+             doorId: item.doorId,
+             name: item.name,
+             sku: item.sku,
+             quantity: item.quantity,
+             finalPrice: item.finalPrice,
+             imageUrl: item.imageUrl,
+             customizations: item.customizations,
+        })),
+        // Convert Firestore Timestamp to ISO string
+        orderDate: data.orderDate instanceof Timestamp ? data.orderDate.toDate().toISOString() : new Date().toISOString(), // Fallback
+        paymentInfo: data.paymentInfo as z.infer<typeof PaymentInfoSchema>,
+        shippingInfo: data.shippingInfo as z.infer<typeof ShippingInfoSchema>,
+        status: data.status as string,
+        totalAmount: typeof data.totalAmount === 'number' ? data.totalAmount : 0,
+        trackingInfo: data.trackingInfo as z.infer<typeof TrackingInfoSchema> | undefined,
+        userId: data.userId as string,
+         // --- Compatibility mappings (optional, based on UI needs) ---
+         createdAt: data.orderDate instanceof Timestamp ? data.orderDate.toDate().toISOString() : new Date().toISOString(),
+         total: typeof data.totalAmount === 'number' ? data.totalAmount : 0,
+         customer: { // Map from shippingInfo
+             name: data.shippingInfo?.name || 'N/A',
+             email: data.shippingInfo?.email,
+             phone: data.shippingInfo?.phone,
+             address: data.shippingInfo?.address || 'N/A',
+         },
+          paymentStatus: data.paymentInfo?.paymentMethod || data.status, // Map payment method or fallback to main status
+         shipmentId: data.trackingInfo?.trackingNumber, // Use tracking number as shipment identifier for links
+      };
+      orders.push(orderData);
     });
     console.log(`Fetched ${orders.length} orders.`);
     return { orders };
   } catch (error) {
      let errorMessage = `Error fetching orders from Firestore: ${error instanceof Error ? error.message : String(error)}`;
        if (error instanceof Error && error.message.toLowerCase().includes("index")) {
-          errorMessage = "Firestore query failed: A required index is missing. Please create the index in the Firebase console (Firestore Database > Indexes) for the 'orders' collection, ordered by 'createdAt' descending.";
+          errorMessage = "Firestore query failed: A required index is missing. Please create the index in the Firebase console (Firestore Database > Indexes) for the 'orders' collection, ordered by 'orderDate' descending.";
           console.warn(errorMessage);
         }
     console.error(errorMessage);
@@ -66,26 +91,45 @@ async function getOrders(): Promise<{ orders: Order[]; error?: string }> {
   }
 }
 
+// Status badge logic - may need adjustment based on Firestore status values
 const getStatusVariant = (status: string): "default" | "secondary" | "outline" | "destructive" => {
    switch (status?.toLowerCase()) {
     case 'processing':
-    case 'pending payment':
+    case 'shipment information received': // Example shipment status mapping
       return 'default';
-    case 'shipped':
+    case 'shipped': // Assuming Shipped exists
+    case 'in transit': // Example shipment status mapping
       return 'secondary';
-    case 'delivered':
-    case 'paid':
+    case 'delivered': // Assuming Delivered exists
       return 'outline';
+    case 'pending payment': // Main order status
+      return 'secondary'; // Or 'default' based on preference
     case 'cancelled':
-    case 'failed':
-    case 'refunded':
+    case 'failed': // Potential payment status
+    case 'refunded': // Potential payment status
       return 'destructive';
-    case 'pending': // Payment pending
-      return 'secondary';
-    default:
+    case 'paid': // Potential payment status
+        return 'outline';
+    default: // Fallback for unknown or other statuses
       return 'secondary';
   }
 };
+
+// Get distinct statuses from fetched orders for filtering
+const getDistinctStatuses = (orders: Order[]): string[] => {
+    const statuses = new Set<string>();
+    orders.forEach(order => {
+        statuses.add(order.status); // Add main status
+        if (order.trackingInfo?.status) {
+            statuses.add(order.trackingInfo.status); // Add tracking status if available
+        }
+         if (order.paymentInfo?.paymentMethod) { // Add payment method if relevant
+            statuses.add(order.paymentInfo.paymentMethod);
+         }
+    });
+    return Array.from(statuses).sort();
+};
+
 
 export default function OrdersPage() {
   const [orders, setOrders] = React.useState<Order[]>([]);
@@ -93,6 +137,7 @@ export default function OrdersPage() {
   const [fetchError, setFetchError] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedStatus, setSelectedStatus] = React.useState("all");
+  const [availableStatuses, setAvailableStatuses] = React.useState<string[]>([]);
 
   // Fetch data on component mount
   React.useEffect(() => {
@@ -104,19 +149,29 @@ export default function OrdersPage() {
         setFetchError(error);
       } else {
         setOrders(fetchedOrders);
+        setAvailableStatuses(getDistinctStatuses(fetchedOrders)); // Update available statuses for filter
       }
       setIsLoading(false);
     };
     fetchData();
   }, []); // Empty dependency array ensures this runs once on mount
 
-  // Filter orders based on search and status
+  // Filter orders based on search and status (now includes more comprehensive check)
   const filteredOrders = React.useMemo(() => {
     return orders.filter(order => {
+      const searchLower = searchQuery.toLowerCase();
       const matchesSearch = searchQuery === "" ||
-        order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = selectedStatus === "all" || order.status.toLowerCase() === selectedStatus.toLowerCase();
+        order.id.toLowerCase().includes(searchLower) ||
+        order.shippingInfo.name.toLowerCase().includes(searchLower) ||
+        (order.shippingInfo.email && order.shippingInfo.email.toLowerCase().includes(searchLower)) ||
+        (order.trackingInfo?.trackingNumber && order.trackingInfo.trackingNumber.toLowerCase().includes(searchLower)); // Search tracking number
+
+      // Check against main status, tracking status, or payment method if relevant
+      const matchesStatus = selectedStatus === "all" ||
+                            order.status.toLowerCase() === selectedStatus.toLowerCase() ||
+                            (order.trackingInfo?.status && order.trackingInfo.status.toLowerCase() === selectedStatus.toLowerCase()) ||
+                             (order.paymentInfo?.paymentMethod && order.paymentInfo.paymentMethod.toLowerCase() === selectedStatus.toLowerCase());
+
       return matchesSearch && matchesStatus;
     });
   }, [orders, searchQuery, selectedStatus]);
@@ -125,9 +180,10 @@ export default function OrdersPage() {
     <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-4xl font-bold text-foreground">Orders</h1>
-        <Button asChild className="btn-primary-gradient">
+        {/* Link to create order page (assuming it exists or needs update) */}
+        <Button asChild className="btn-primary-gradient" disabled>
            <Link href="/orders/new">
-             <PlusCircle className="mr-2 h-4 w-4" /> Create New Order
+             <PlusCircle className="mr-2 h-4 w-4" /> Create New Order (soon)
            </Link>
          </Button>
       </div>
@@ -146,7 +202,7 @@ export default function OrdersPage() {
                )}
                 {fetchError.includes("index") && (
                   <span className="block mt-2 text-xs">
-                     A Firestore index might be required. Please check the Firebase console under Firestore Database &gt; Indexes. Create an index on the 'orders' collection for the 'createdAt' field (descending).
+                     A Firestore index might be required. Please check the Firebase console under Firestore Database &gt; Indexes. Create an index on the 'orders' collection for the 'orderDate' field (descending).
                   </span>
                  )}
              </AlertDescription>
@@ -159,7 +215,7 @@ export default function OrdersPage() {
             <div className="relative flex-grow w-full md:w-auto">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by Order ID or Customer Name..."
+                placeholder="Search ID, Customer, Email, Tracking..."
                 className="pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -170,7 +226,7 @@ export default function OrdersPage() {
                <Select
                  value={selectedStatus}
                  onValueChange={setSelectedStatus}
-                 disabled={isLoading}
+                 disabled={isLoading || availableStatuses.length === 0}
                >
                  <SelectTrigger className="w-full sm:w-[180px]">
                     <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
@@ -178,7 +234,8 @@ export default function OrdersPage() {
                  </SelectTrigger>
                  <SelectContent>
                    <SelectItem value="all">All Statuses</SelectItem>
-                   {OrderSchema.shape.status.options.map(status => (
+                   {/* Use dynamically generated statuses */}
+                   {availableStatuses.map(status => (
                         <SelectItem key={status} value={status.toLowerCase()}>{status}</SelectItem>
                    ))}
                  </SelectContent>
@@ -253,11 +310,12 @@ export default function OrdersPage() {
                          {order.id.substring(0, 8)}...
                       </Link>
                     </TableCell>
-                   <TableCell>{order.customer.name}</TableCell>
-                    <TableCell>{format(new Date(order.createdAt), 'PP')}</TableCell>
-                   <TableCell className="text-right">₹{order.total.toFixed(2)}</TableCell>
+                   <TableCell>{order.shippingInfo.name}</TableCell>
+                    <TableCell>{format(new Date(order.orderDate), 'PP')}</TableCell>
+                   <TableCell className="text-right">₹{order.totalAmount.toFixed(2)}</TableCell>
                     <TableCell className="text-center">{order.items.reduce((sum, item) => sum + item.quantity, 0)}</TableCell>
                    <TableCell className="text-center">
+                     {/* Display main status, consider adding tracking status badge too if needed */}
                      <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
                    </TableCell>
                     <TableCell>
@@ -274,16 +332,17 @@ export default function OrdersPage() {
                             <Link href={`/orders/${order.id}`}>View Details</Link>
                         </DropdownMenuItem>
                          {/* Enable Edit when implemented */}
-                          <DropdownMenuItem asChild>
-                             <Link href={`/orders/${order.id}/edit`}>Edit Order</Link>
+                          <DropdownMenuItem asChild disabled>
+                             <Link href={`/orders/${order.id}/edit`}>Edit Order (soon)</Link>
                           </DropdownMenuItem>
                          <DropdownMenuSeparator />
-                          {order.shipmentId && (
-                             <DropdownMenuItem asChild>
-                                 <Link href={`/logistics/${order.shipmentId}`}>View Shipment</Link>
+                          {order.trackingInfo?.trackingNumber && (
+                             <DropdownMenuItem asChild disabled>
+                                 {/* Assuming logistics page uses tracking number or a shipment ID */}
+                                 <Link href={`/logistics/${order.trackingInfo.trackingNumber}`}>View Shipment (soon)</Link>
                               </DropdownMenuItem>
                           )}
-                          {/* Placeholder for Cancel action */}
+                          {/* Placeholder for Cancel action - Needs update */}
                          <DropdownMenuItem className="text-destructive" disabled>Cancel Order (soon)</DropdownMenuItem>
                        </DropdownMenuContent>
                      </DropdownMenu>
@@ -302,7 +361,7 @@ export default function OrdersPage() {
               <p className="text-sm mt-2">
                  {searchQuery || selectedStatus !== 'all'
                    ? "Try adjusting your search or filters."
-                   : "Create a new order to get started."}
+                   : "No orders found in the database."}
               </p>
             </div>
          </Card>

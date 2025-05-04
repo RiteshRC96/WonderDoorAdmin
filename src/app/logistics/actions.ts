@@ -1,180 +1,147 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { db, collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, arrayUnion, getDoc } from '@/lib/firebase/firebase';
-import { ShipmentSchema, type CreateShipmentInput, type Shipment } from '@/schemas/shipment';
-import { linkShipmentToOrderAction } from '@/app/orders/actions'; // Import action to link shipment
+// Schemas might need updates or removal depending on how shipments are handled now
+import { ShipmentSchema, type CreateShipmentInternal, type Shipment } from '@/schemas/shipment';
+import { linkShipmentToOrderAction } from '@/app/orders/actions'; // This action also needs update
 
-// --- Create Shipment Action ---
+// --- CREATE SHIPMENT ACTION (LIKELY OBSOLETE or NEEDS REWORK) ---
+// Shipment creation is now likely handled within createOrderAction
+/*
 export async function createShipmentAction(data: CreateShipmentInput): Promise<{ success: boolean; message: string; shipmentId?: string; errors?: Record<string, string[]> | null }> {
-  if (!db) {
-    const errorMessage = "Database configuration error. Unable to create shipment.";
-    console.error("Firestore database is not initialized. Cannot create shipment.");
-    return { success: false, message: errorMessage, errors: null };
-  }
+  // ... Firestore check ...
 
   const validationResult = ShipmentSchema.safeParse(data);
   if (!validationResult.success) {
-    console.error("Shipment Validation Errors:", validationResult.error.flatten().fieldErrors);
-    return {
-      success: false,
-      message: "Validation failed. Please check the shipment details.",
-      errors: validationResult.error.flatten().fieldErrors,
-    };
+    // ... handle validation errors ...
+    return { success: false, message: "Validation failed.", errors: validationResult.error.flatten().fieldErrors };
   }
 
   const initialHistoryEvent = {
-      timestamp: Timestamp.now().toISOString(), // Use current time as ISO string for initial event
-      status: validationResult.data.status, // Use the initial status provided
-      location: validationResult.data.origin, // Use origin as initial location
+      timestamp: Timestamp.now().toISOString(),
+      status: validationResult.data.status,
+      location: validationResult.data.origin,
   };
 
-  const newShipmentData = {
+  const newShipmentData: CreateShipmentInternal = { // Use internal type if needed
     ...validationResult.data,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    history: [initialHistoryEvent], // Initialize history with the first event
-    actualDelivery: null, // Explicitly set actualDelivery to null initially
+    createdAt: Timestamp.now(), // Use Firestore Timestamp for creation
+    updatedAt: Timestamp.now(), // Use Firestore Timestamp for creation
+    history: [initialHistoryEvent],
+    actualDelivery: null,
   };
 
   try {
-    console.log("Attempting to add shipment to Firestore...");
     const shipmentsCollectionRef = collection(db, 'shipments');
     const docRef = await addDoc(shipmentsCollectionRef, newShipmentData);
-    console.log(`Successfully added shipment with ID: ${docRef.id}`);
 
-    // Attempt to link this shipment to the order
-    const linkResult = await linkShipmentToOrderAction(newShipmentData.orderId, docRef.id);
-    if (!linkResult.success) {
-        console.warn(`Failed to automatically link shipment ${docRef.id} to order ${newShipmentData.orderId}: ${linkResult.message}`);
-        // Decide if this should be a hard failure or just a warning
-    }
+    // Link shipment to order (this action also needs update)
+    // const linkResult = await linkShipmentToOrderAction(newShipmentData.orderId, docRef.id);
+    // ... handle link result ...
 
-    revalidatePath('/logistics'); // Revalidate the logistics list page
-    revalidatePath(`/logistics/${docRef.id}`); // Revalidate the specific shipment page
-    revalidatePath('/'); // Revalidate dashboard
+    revalidatePath('/logistics');
+    revalidatePath(`/logistics/${docRef.id}`);
+    revalidatePath('/');
 
     return {
       success: true,
-      message: `Shipment ${docRef.id} created successfully! ${linkResult.success ? '' : '(Manual order link may be needed)'}`,
+      message: `Shipment ${docRef.id} created successfully!`, // Adjust message
       shipmentId: docRef.id,
     };
   } catch (error) {
-    const errorMessage = `Error adding shipment to Firestore: ${error instanceof Error ? error.message : String(error)}`;
-    console.error(errorMessage);
-    return {
-      success: false,
-      message: "Failed to create shipment due to a database error.",
-      errors: null,
-    };
+    // ... error handling ...
+    return { success: false, message: "Failed to create shipment.", errors: null };
   }
 }
+*/
 
-// --- Update Shipment Status & Add History Action ---
+// --- UPDATE SHIPMENT STATUS ACTION (NEEDS REWORK) ---
+// This action now needs to update the 'trackingInfo' within the specific ORDER document.
+/*
 export async function updateShipmentStatusAction(
-  shipmentId: string,
-  newStatus: Shipment['status'],
+  orderId: string, // Need Order ID to find the document
+  newStatus: string, // Use string as enum might change
   location?: string,
   notes?: string
 ): Promise<{ success: boolean; message: string }> {
-  if (!db) {
-    const errorMessage = "Database configuration error. Unable to update shipment status.";
-    console.error("Firestore database is not initialized. Cannot update shipment status.");
-    return { success: false, message: errorMessage };
-  }
-  if (!shipmentId) {
-    return { success: false, message: "Shipment ID is required." };
-  }
+  if (!db) return { success: false, message: "Database config error." };
+  if (!orderId) return { success: false, message: "Order ID is required." };
 
-  const validStatuses = ShipmentSchema.shape.status.options;
-  if (!validStatuses.includes(newStatus)) {
-     return { success: false, message: `Invalid status: ${newStatus}` };
-  }
+  // Optional: Validate newStatus against expected values if needed
 
   const now = Timestamp.now();
   const historyEvent = {
-    timestamp: now.toDate().toISOString(), // Convert to ISO string
+    timestamp: now.toDate().toISOString(),
     status: newStatus,
-    location: location || "Update Recorded", // Default location if not provided
-    notes: notes || undefined, // Add notes if provided
+    location: location || "Update Recorded",
+    notes: notes || undefined,
   };
-   // Remove undefined notes field
-   if (historyEvent.notes === undefined) {
-       delete historyEvent.notes;
-   }
-
+   if (historyEvent.notes === undefined) delete historyEvent.notes;
 
   try {
-    console.log(`Attempting to update status for shipment ID: ${shipmentId} to ${newStatus}`);
-    const shipmentDocRef = doc(db, 'shipments', shipmentId);
+    console.log(`Attempting to update tracking status for order ID: ${orderId} to ${newStatus}`);
+    const orderDocRef = doc(db, 'orders', orderId);
 
-    // Check if status is 'Delivered' to update actualDelivery
+    // Prepare update for the 'trackingInfo' map field
     const updateData: any = {
-        status: newStatus,
-        updatedAt: now,
-        history: arrayUnion(historyEvent), // Add the new event to the history array
+        // Use dot notation to update specific fields in the map
+        'trackingInfo.status': newStatus,
+        'trackingInfo.updatedAt': now, // Add/update an updatedAt within trackingInfo?
+        // Add history event? Firestore doesn't directly support arrayUnion within a map update easily.
+        // Might need to read the order, update the history array, then update the whole trackingInfo map.
+        // OR store history separately if it gets complex.
     };
 
+    // Handle 'Delivered' status - update trackingInfo and maybe top-level order status
     if (newStatus === 'Delivered') {
-        updateData.actualDelivery = now; // Set actual delivery timestamp
+        updateData['trackingInfo.actualDelivery'] = now; // Add actualDelivery to trackingInfo
+        // Optionally update the main order status as well
+        // updateData['status'] = 'Delivered'; // Update top-level status
     }
 
-
-    await updateDoc(shipmentDocRef, updateData);
-    console.log(`Successfully updated status and added history for shipment ID: ${shipmentId}`);
-
-    // Potentially update the linked order status if the shipment is delivered
-    if (newStatus === 'Delivered') {
-        const shipmentSnap = await getDoc(shipmentDocRef);
-        if (shipmentSnap.exists()) {
-            const shipmentData = shipmentSnap.data() as Shipment;
-            // Import and call the order update action (ensure no circular dependency issues)
-            const { updateOrderStatusAction: updateLinkedOrderStatus } = await import('@/app/orders/actions');
-             await updateLinkedOrderStatus(shipmentData.orderId, 'Delivered');
-        }
+    // --- Read-Modify-Write for History (Example) ---
+    const orderSnap = await getDoc(orderDocRef);
+    if (orderSnap.exists()) {
+        const orderData = orderSnap.data();
+        const currentTrackingInfo = orderData.trackingInfo || {};
+        const currentHistory = currentTrackingInfo.history || [];
+        currentHistory.push(historyEvent); // Add new event
+        updateData['trackingInfo.history'] = currentHistory; // Update the whole history array
+    } else {
+        return { success: false, message: `Order ${orderId} not found.` };
     }
+     // --- End Read-Modify-Write ---
 
 
-    revalidatePath('/logistics'); // Revalidate the list page
-    revalidatePath(`/logistics/${shipmentId}`); // Revalidate the detail page
-    revalidatePath('/'); // Revalidate dashboard
-    // Revalidate order pages if status changed significantly (like Delivered)
-     if (newStatus === 'Delivered') {
-        const shipmentSnap = await getDoc(shipmentDocRef);
-        if (shipmentSnap.exists()) {
-            const shipmentData = shipmentSnap.data() as Shipment;
-             revalidatePath('/orders');
-             revalidatePath(`/orders/${shipmentData.orderId}`);
-         }
-     }
+    await updateDoc(orderDocRef, updateData);
+    console.log(`Successfully updated tracking status for order ID: ${orderId}`);
+
+    // --- Revalidate Paths ---
+    revalidatePath('/logistics'); // Revalidate logistics list (derived from orders)
+    revalidatePath(`/orders/${orderId}`); // Revalidate the order detail page
+    revalidatePath('/');
 
     return { success: true, message: "Shipment status updated successfully." };
   } catch (error) {
-    const errorMessage = `Error updating shipment status (ID: ${shipmentId}): ${error instanceof Error ? error.message : String(error)}`;
-    console.error(errorMessage);
-    return {
-      success: false,
-      message: "Failed to update shipment status due to a database error.",
-    };
+    // ... error handling ...
+    return { success: false, message: "Failed to update shipment status." };
   }
 }
+*/
 
-// --- Delete Shipment Action (Use with caution!) ---
-// Usually, you wouldn't delete shipments, but mark them as cancelled or archived.
-// export async function deleteShipmentAction(shipmentId: string): Promise<{ success: boolean; message: string; }> {
-//   if (!db) { /* ... error handling ... */ }
-//   if (!shipmentId) { /* ... error handling ... */ }
 
-//   try {
-//     console.log(`Attempting to delete shipment with ID: ${shipmentId}`);
-//     const shipmentDocRef = doc(db, 'shipments', shipmentId);
-//     await deleteDoc(shipmentDocRef); // Firestore delete function
-//     console.log(`Successfully deleted shipment with ID: ${shipmentId}`);
+// --- Placeholder Functions ---
+export async function createShipmentAction(data: any): Promise<any> {
+    console.warn("createShipmentAction is likely obsolete or needs rework.");
+    return { success: false, message: "Shipment creation now handled via orders." };
+}
 
-//     revalidatePath('/logistics');
+export async function updateShipmentStatusAction(orderId: string, newStatus: string, location?: string, notes?: string): Promise<any> {
+    console.warn("updateShipmentStatusAction needs rework to update order's trackingInfo.");
+    return { success: false, message: "Shipment status update needs rework." };
+}
 
-//     return { success: true, message: "Shipment deleted successfully." };
-//   } catch (error) {
-//     /* ... error handling ... */
-//   }
-// }
+// Delete Shipment action is likely irrelevant now as shipments are part of orders.
+// Deleting an order should handle associated data.
