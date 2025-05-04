@@ -142,7 +142,7 @@ export default function LogisticsPage() {
     <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-4xl font-bold text-foreground">Logistics</h1>
-        <Button disabled> {/* Disabled until implemented */}
+        <Button disabled className="btn-primary-gradient"> {/* Disabled until implemented */}
           <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Shipment (soon)
         </Button>
       </div>
@@ -169,7 +169,7 @@ export default function LogisticsPage() {
        )}
 
        {/* Filters and Search Section */}
-        <Card className="p-4 md:p-6 shadow-sm">
+        <Card className="p-4 md:p-6 shadow-sm card-header-gradient border-none">
          <div className="flex flex-col md:flex-row gap-4 items-center">
            <div className="relative flex-grow w-full md:w-auto">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -201,7 +201,7 @@ export default function LogisticsPage() {
                <Select
                   value={selectedCarrier}
                   onValueChange={setSelectedCarrier}
-                  disabled={isLoading}
+                  disabled={isLoading || uniqueCarriers.length === 0}
                >
                  <SelectTrigger className="w-full sm:w-[180px]">
                     <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
@@ -352,3 +352,4 @@ export default function LogisticsPage() {
 // };
 
 // export const dynamic = 'force-dynamic';
+

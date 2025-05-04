@@ -125,7 +125,7 @@ export default function OrdersPage() {
     <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-4xl font-bold text-foreground">Orders</h1>
-        <Button asChild>
+        <Button asChild className="btn-primary-gradient">
            <Link href="/orders/new">
              <PlusCircle className="mr-2 h-4 w-4" /> Create New Order
            </Link>
@@ -154,7 +154,7 @@ export default function OrdersPage() {
        )}
 
        {/* Filters and Search Section */}
-       <Card className="p-4 md:p-6 shadow-sm">
+       <Card className="p-4 md:p-6 shadow-sm card-header-gradient border-none">
           <div className="flex flex-col md:flex-row gap-4 items-center">
             <div className="relative flex-grow w-full md:w-auto">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -317,3 +317,4 @@ export default function OrdersPage() {
 // };
 
 // export const dynamic = 'force-dynamic';
+

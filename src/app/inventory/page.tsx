@@ -23,11 +23,13 @@ interface InventoryItem extends Omit<AddItemInput, 'createdAt' | 'updatedAt'> {
 
 // Function to fetch inventory items from Firestore (can be called from client or server)
 async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: string }> {
-  if (!db) {
+  if (db === null) {
     const errorMessage = "Firestore database is not initialized. Cannot fetch inventory. Please check Firebase configuration in .env.local and restart the server.";
     console.error(errorMessage);
+    // Return a specific error message related to configuration/initialization
     return { items: [], error: "Database initialization failed. Please check configuration." };
   }
+
 
   try {
     console.log("Attempting to fetch inventory items from Firestore...");
@@ -105,7 +107,7 @@ export default function InventoryPage() {
     <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-4xl font-bold text-foreground">Inventory</h1>
-        <Button asChild>
+        <Button asChild className="btn-primary-gradient">
           <Link href="/inventory/new">
             <PlusCircle className="mr-2 h-4 w-4" /> Add New Item
           </Link>
@@ -135,7 +137,7 @@ export default function InventoryPage() {
       )}
 
       {/* Filters and Search Section */}
-      <Card className="p-4 md:p-6 shadow-sm">
+      <Card className="p-4 md:p-6 shadow-sm card-header-gradient border-none">
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="relative flex-grow w-full md:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -240,4 +242,5 @@ export default function InventoryPage() {
 
 // Dynamic rendering is inherent with client-side fetching/filtering
 // export const dynamic = 'force-dynamic';
+
 
