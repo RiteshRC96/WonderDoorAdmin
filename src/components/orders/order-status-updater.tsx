@@ -5,6 +5,7 @@ import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button"; // Import Button component
 import { useToast } from "@/hooks/use-toast";
 import { updateOrderStatusAction } from "@/app/orders/actions"; // Import the server action
 import type { Order } from "@/schemas/order";
@@ -171,3 +172,4 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
     </Card>
   );
 }
+
