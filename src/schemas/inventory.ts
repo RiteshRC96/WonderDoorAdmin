@@ -17,16 +17,13 @@ export const AddItemSchema = z.object({
   sku: z.string().min(1, { message: "SKU is required." }).toUpperCase(),
   weight: z.string().optional(),
   leadTime: z.string().optional(),
-  // imageUrl is now optional and will hold the image URL (e.g., from Google Drive).
+  // imageUrl is optional but must be a valid URL (like Google Drive share link) if provided.
   imageUrl: z.string().url("Must be a valid URL.").optional().or(z.literal('')), // Allow empty string or valid URL
   // Removed imageHint
-  // Removed imageDataUrl from payload type below
+  // Removed imageDataUrl logic previously handled in actions
 });
 
 // Type for data submitted from the form or stored in DB
 export type AddItemInput = z.infer<typeof AddItemSchema>;
 
 // No separate payload type needed anymore
-// export interface AddItemPayload extends AddItemInput {
-//   imageDataUrl?: string;
-// }

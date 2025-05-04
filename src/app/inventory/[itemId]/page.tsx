@@ -38,7 +38,7 @@ interface InventoryItem extends Omit<AddItemInput, 'imageHint'> {
   dimensions: string;
   stock: number;
   price: number;
-  imageHint?: string; // Keep for data-ai-hint fallback
+  // Removed imageHint property from interface
 }
 
 
@@ -61,8 +61,9 @@ async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | n
     }
 
     console.log("Item found in Firestore.");
-    // Cast data including optional imageUrl and possible imageHint
-    const data = docSnap.data() as AddItemInput & { createdAt?: Timestamp, updatedAt?: Timestamp, imageHint?: string };
+    // Cast data including optional imageUrl, exclude imageHint
+    const data = docSnap.data() as Omit<AddItemInput, 'imageHint'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
+
 
     // Convert Timestamps to ISO strings
     const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined;
@@ -122,8 +123,7 @@ async function getItemDetails(itemId: string): Promise<{ item: InventoryItem | n
 
     const itemData: InventoryItem = {
       id: docSnap.id,
-      ...(restData as Omit<AddItemInput, 'imageHint'>), // Cast restData appropriately
-      imageHint: data.imageHint, // Explicitly add imageHint back if it exists
+      ...(restData as Omit<AddItemInput, 'imageHint'>), // Cast restData appropriately, ensure imageHint is omitted
       imageUrl: data.imageUrl, // Keep imageUrl
       createdAt,
       updatedAt, // Add updatedAt here
@@ -256,7 +256,7 @@ export default async function InventoryItemPage({ params }: { params: { itemId: 
                  layout="fill"
                  objectFit="cover"
                  // Use item name or style as fallback hint if imageHint was removed/absent
-                 data-ai-hint={item.imageHint || item.name || item.style || 'product image'}
+                 data-ai-hint={item.name || item.style || 'product image'}
                  className="bg-white"
                />
              </div>

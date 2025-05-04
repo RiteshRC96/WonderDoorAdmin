@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 // Assuming inventory schema exists, but imageHint is removed from it too
 // import { AddItemSchema } from './inventory';

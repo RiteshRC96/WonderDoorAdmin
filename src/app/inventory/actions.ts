@@ -12,39 +12,31 @@ import {
     serverTimestamp,
     Timestamp,
     getDoc, // Keep getDoc for checking existence in delete
-    // Storage related imports are kept as image upload is implemented
-    storage,
-    storageRef,
-    uploadString,
-    getDownloadURL,
-    deleteObject
+    // Removed Storage imports
 } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
 
 // Helper function to check Firestore initialization
 function checkFirebaseInitialization() {
-  if (!db || !storage) { // Check both Firestore and Storage
-    const errorMessage = `Firebase Initialization Error: Firestore database or Storage is not initialized. Check Firebase configuration. Operation cannot proceed.`;
+  if (!db) { // Check only Firestore
+    const errorMessage = `Firebase Initialization Error: Firestore database is not initialized. Check Firebase configuration. Operation cannot proceed.`;
     console.error(errorMessage);
-    return { initialized: false, message: "Database/Storage configuration error. Please check setup and restart." };
+    return { initialized: false, message: "Database configuration error. Please check setup and restart." };
   }
   return { initialized: true, message: "" };
 }
 
 
 // Server Action to add a new inventory item to Firestore
-export async function addItemAction(payload: AddItemInput & { imageDataUrl?: string }): Promise<{ success: boolean; message: string; itemId?: string; errors?: Record<string, string[]> | null }> {
-  console.log("addItemAction started. Received payload:", Object.keys(payload)); // Log keys to check payload structure
+export async function addItemAction(payload: AddItemInput): Promise<{ success: boolean; message: string; itemId?: string; errors?: Record<string, string[]> | null }> {
+  console.log("addItemAction started. Received payload:", Object.keys(payload));
   const firebaseCheck = checkFirebaseInitialization();
   if (!firebaseCheck.initialized) {
     console.error("Firebase initialization check failed.");
     return { success: false, message: firebaseCheck.message, errors: null };
   }
 
-  // Separate image data URL from the main data for validation
-  const { imageDataUrl, ...itemData } = payload;
-
-  // Validate the item data (excluding the image data URL)
-  const validationResult = AddItemSchema.safeParse(itemData);
+  // Validate the item data
+  const validationResult = AddItemSchema.safeParse(payload);
 
   if (!validationResult.success) {
     console.error("Validation Errors:", validationResult.error.flatten().fieldErrors);
@@ -57,51 +49,14 @@ export async function addItemAction(payload: AddItemInput & { imageDataUrl?: str
   console.log("Validation successful.");
   const validatedData = validationResult.data;
 
-  let imageUrl: string | undefined = undefined; // Initialize imageUrl as undefined
-
-  // --- Handle Image Upload ---
-  if (imageDataUrl && storage) {
-      try {
-          console.log("Image data URL provided, attempting upload...");
-          // Validate Data URL format (basic check)
-          if (!imageDataUrl.startsWith('data:image/')) {
-              throw new Error("Invalid image data URL format.");
-          }
-
-          // Generate a unique filename (e.g., using timestamp and SKU)
-          const fileExtension = imageDataUrl.substring(imageDataUrl.indexOf('/') + 1, imageDataUrl.indexOf(';base64'));
-          const fileName = `inventory/${validatedData.sku || 'unknown_sku'}-${Date.now()}.${fileExtension}`;
-          const imageStorageRef = storageRef(storage, fileName);
-
-          // Upload the image data (extract base64 part)
-          const base64Data = imageDataUrl.split(',')[1];
-          console.log(`Uploading image to Firebase Storage at: ${fileName}`);
-          const uploadResult = await uploadString(imageStorageRef, base64Data, 'base64', {
-             contentType: `image/${fileExtension}` // Set content type explicitly
-           });
-
-          // Get the download URL
-          imageUrl = await getDownloadURL(uploadResult.ref);
-          console.log(`Image uploaded successfully. Download URL: ${imageUrl}`);
-
-      } catch (uploadError) {
-          console.error("Error uploading image to Firebase Storage:", uploadError);
-          // If image upload fails, should we stop the whole process? Or just proceed without the image?
-          // Decision: Proceed without image, but log the error and inform the user.
-          return {
-              success: false,
-              message: `Item data is valid, but image upload failed: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}. Please try adding the item without an image or check the file.`,
-              errors: null, // Not a validation error on item data itself
-          };
-      }
-  } else {
-     console.log("No image data URL provided or storage not initialized, skipping image upload.");
-  }
+  // Image is now just a URL, no upload handling needed here
+  const imageUrl = validatedData.imageUrl || undefined; // Use the URL from payload or undefined
+  console.log("Image URL provided:", imageUrl);
 
   // Prepare the final data for Firestore
   const newItemData = {
       ...validatedData,
-      imageUrl: imageUrl, // Add the obtained imageUrl (or undefined if upload failed/skipped)
+      // imageUrl is already part of validatedData
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
   };
@@ -129,7 +84,7 @@ export async function addItemAction(payload: AddItemInput & { imageDataUrl?: str
 
     return {
       success: true,
-      message: `Item '${newItemData.name}' added successfully!${imageUrl ? '' : ' (Image upload skipped/failed)'}`,
+      message: `Item '${newItemData.name}' added successfully!`,
       itemId: docRef.id,
       errors: null,
     };
@@ -172,20 +127,7 @@ export async function addItemAction(payload: AddItemInput & { imageDataUrl?: str
         errorMessage = "An unexpected error occurred while saving the item.";
      }
 
-     // --- Orphaned Image Cleanup ---
-      // If Firestore save fails *after* a successful image upload, delete the orphaned image
-      if (imageUrl && storage) {
-          console.warn(`Firestore save failed after image upload. Deleting orphaned image: ${imageUrl}`);
-          try {
-              const orphanedImageRef = storageRef(storage, imageUrl); // Get ref from URL
-              await deleteObject(orphanedImageRef);
-              console.log("Orphaned image deleted successfully.");
-          } catch (deleteError) {
-               console.error("Failed to delete orphaned image:", deleteError);
-               errorMessage += " Failed to clean up uploaded image."; // Append to user message
-           }
-      }
-
+    // Removed orphaned image cleanup logic
 
     // ALWAYS return null for errors when it's not a validation failure
     return {
@@ -197,7 +139,7 @@ export async function addItemAction(payload: AddItemInput & { imageDataUrl?: str
 }
 
 // Server Action to update an existing inventory item in Firestore
-// TODO: Add image update/delete logic here as well
+// Image URL is just another field to update if provided
 export async function updateItemAction(
   itemId: string,
   data: AddItemInput // Use AddItemInput directly
@@ -223,14 +165,7 @@ export async function updateItemAction(
     };
   }
 
-  // --- Image Handling TODO ---
-  // Needs logic to:
-  // 1. Check if a new image is provided (e.g., via `imageDataUrl` similar to add)
-  // 2. If yes, upload new image, get new URL.
-  // 3. Check if an old `imageUrl` exists on the item being updated.
-  // 4. If yes, delete the old image from Storage using `deleteObject`.
-  // 5. Update the `imageUrl` field in Firestore with the new URL.
-  // 6. Handle cases where the image is removed (set `imageUrl` to null/delete field and delete from storage).
+  // Image URL is part of validationResult.data if provided and valid
 
   // Prepare the data for Firestore update
   const itemDataToUpdate: Partial<AddItemInput & { updatedAt: any }> = {
@@ -321,7 +256,7 @@ export async function updateItemAction(
 }
 
 
-// Server Action to delete an inventory item from Firestore and its image from Storage
+// Server Action to delete an inventory item from Firestore (no image deletion needed)
 export async function deleteItemAction(itemId: string): Promise<{ success: boolean; message: string; }> {
   const firebaseCheck = checkFirebaseInitialization();
   if (!firebaseCheck.initialized) {
@@ -333,57 +268,30 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
   }
 
   const itemDocRef = doc(db, 'inventory', itemId);
-  let imageUrlToDelete: string | undefined;
 
   try {
     console.log(`Attempting to delete item document for ID: ${itemId}`);
 
-    // Get the document first to retrieve the imageUrl for deletion
+    // Get the document first to check if it exists (optional, deleteDoc handles non-existent docs gracefully)
     const docSnap = await getDoc(itemDocRef);
     if (!docSnap.exists()) {
        console.log(`Item ${itemId} not found in Firestore, cannot delete.`);
        // If it doesn't exist in Firestore, no need to proceed.
        // Technically success=true as the end state (item gone) is achieved.
        return { success: true, message: `Item with ID ${itemId} not found or already deleted.` };
-    } else {
-        // Store the image URL if it exists
-        imageUrlToDelete = docSnap.data()?.imageUrl;
     }
 
     // Delete Firestore document
     await deleteDoc(itemDocRef);
     console.log(`Successfully deleted Firestore document for item ID: ${itemId}`);
 
-    // --- Delete Image from Storage ---
-    if (imageUrlToDelete && storage) {
-        console.log(`Attempting to delete image from Storage: ${imageUrlToDelete}`);
-        try {
-            const imageRefToDelete = storageRef(storage, imageUrlToDelete); // Get ref from URL
-            await deleteObject(imageRefToDelete);
-            console.log("Associated image deleted successfully from Storage.");
-        } catch (storageError: any) {
-             // Log storage error but don't fail the whole operation if Firestore delete succeeded
-             console.warn(`Firestore document deleted, but failed to delete image from Storage (URL: ${imageUrlToDelete}):`, storageError);
-             // If error is 'object-not-found', it's okay, maybe already deleted or URL was wrong
-             if (storageError.code === 'storage/object-not-found') {
-                console.log("Image was not found in Storage (might be already deleted or URL incorrect).");
-                 return { success: true, message: "Item deleted successfully (image not found in storage)." };
-             } else {
-                // For other storage errors, inform the user but still report overall success
-                return { success: true, message: "Item deleted, but failed to remove associated image from storage. Manual cleanup might be needed." };
-             }
-        }
-    } else if (imageUrlToDelete) {
-        console.warn("Item had an imageUrl, but Storage is not initialized. Cannot delete image.");
-        // Inform user, but report success as Firestore doc is deleted
-        return { success: true, message: "Item deleted, but Storage is not configured to remove the image." };
-    }
+    // --- Image deletion logic removed ---
 
     // Revalidate paths after successful deletion
     revalidatePath('/inventory');
     revalidatePath('/'); // Revalidate dashboard
 
-    return { success: true, message: "Item and associated image (if applicable) deleted successfully." };
+    return { success: true, message: "Item deleted successfully." };
 
   } catch (error) {
     // --- Enhanced Error Logging for Firestore delete ---

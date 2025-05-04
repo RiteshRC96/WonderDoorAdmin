@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -26,7 +25,7 @@ import { cn } from "@/lib/utils"; // Import cn utility
 
 // Expect timestamps as strings (ISO format) from the Server Component
 // Removed imageHint from AddItemInput Omit
-interface InventoryItem extends Omit<AddItemInput, 'createdAt' | 'updatedAt' | 'imageHint'> {
+interface InventoryItem extends Omit<AddItemInput, 'imageHint'> {
   id: string;
   createdAt?: string; // Expecting ISO string or undefined
   updatedAt?: string; // Expecting ISO string or undefined
@@ -38,7 +37,7 @@ interface InventoryItem extends Omit<AddItemInput, 'createdAt' | 'updatedAt' | '
   dimensions: string;
   stock: number;
   price: number;
-  imageHint?: string; // Keep for data-ai-hint even if not in schema
+  // Removed imageHint property
 }
 
 

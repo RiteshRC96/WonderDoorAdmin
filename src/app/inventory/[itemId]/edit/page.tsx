@@ -51,6 +51,7 @@ async function getItemForEdit(itemId: string): Promise<{ item: InventoryItem | n
     // Cast data including optional imageUrl, exclude imageHint
     const data = docSnap.data() as Omit<AddItemInput, 'imageHint'> & { createdAt?: Timestamp, updatedAt?: Timestamp };
 
+
     // Convert Timestamps to ISO strings for serialization
     const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : undefined;
     const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;

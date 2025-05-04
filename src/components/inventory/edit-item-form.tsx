@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -297,7 +296,7 @@ export function EditItemForm({ item }: EditItemFormProps) {
                        <FormItem>
                          <FormLabel>Image URL (Optional)</FormLabel>
                          <FormControl>
-                           <Input type="url" placeholder="https://..." {...field} value={field.value ?? ''} aria-invalid={!!form.formState.errors.imageUrl} />
+                           <Input type="url" placeholder="https://drive.google.com/..." {...field} value={field.value ?? ''} aria-invalid={!!form.formState.errors.imageUrl} />
                          </FormControl>
                          <FormDescription>Enter the full URL of the main product image (e.g., from Google Drive - ensure link sharing is enabled).</FormDescription>
                          <FormMessage />
