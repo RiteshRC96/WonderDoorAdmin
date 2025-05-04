@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/firebase/firebase';
 import type { Shipment } from '@/schemas/shipment';
-import { ShipmentSchema } from '@/schemas/shipment';
+import { ShipmentSchema } from '@/schemas/shipment'; // Keep schema import for status options
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { format } from 'date-fns';
@@ -36,34 +36,54 @@ async function getShipments(): Promise<{ shipments: Shipment[]; error?: string }
    try {
      console.log("Attempting to fetch shipments from Firestore...");
      const shipmentsCollectionRef = collection(db, 'shipments');
+     // Order by creation date, newest first
      const q = query(shipmentsCollectionRef, orderBy('createdAt', 'desc'));
      const querySnapshot = await getDocs(q);
 
      const shipments: Shipment[] = [];
      querySnapshot.forEach((doc) => {
+        // Explicitly cast the data to match expected structure after reading from Firestore
         const data = doc.data() as Omit<Shipment, 'id' | 'createdAt' | 'updatedAt' | 'actualDelivery' | 'history'> & {
              createdAt?: Timestamp,
              updatedAt?: Timestamp,
              actualDelivery?: Timestamp,
-             history?: { timestamp: Timestamp | string }[]
+             // History might contain Timestamps or ISO strings depending on how it was written
+             history?: { timestamp: Timestamp | string, status: string, location?: string, notes?: string }[]
            };
-       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+
+       // Convert Timestamps to ISO strings for consistency and client-side usage
+       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString(); // Fallback
        const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
        const actualDelivery = data.actualDelivery instanceof Timestamp ? data.actualDelivery.toDate().toISOString() : undefined;
-       const history = (data.history || []).map(event => ({
+
+        // Process history array, converting any Timestamps to ISO strings
+        const history = (data.history || []).map(event => ({
            ...event,
+           // Handle both Timestamp and string cases safely
            timestamp: event.timestamp instanceof Timestamp
                ? event.timestamp.toDate().toISOString()
-               : typeof event.timestamp === 'string' ? event.timestamp : new Date().toISOString()
-       }));
+               : typeof event.timestamp === 'string' ? event.timestamp : new Date(0).toISOString() // Fallback for unexpected types
+        }));
 
+       // Construct the final Shipment object
        shipments.push({
          id: doc.id,
-         ...(data as Shipment),
-         createdAt,
-         updatedAt,
-         actualDelivery,
-         history,
+         orderId: data.orderId,
+         customerName: data.customerName,
+         carrier: data.carrier,
+         trackingNumber: data.trackingNumber,
+         status: data.status,
+         origin: data.origin,
+         destination: data.destination,
+         estimatedDelivery: data.estimatedDelivery,
+         pieces: data.pieces,
+         weight: data.weight,
+         dimensions: data.dimensions,
+         notes: data.notes,
+         createdAt, // Use converted ISO string
+         updatedAt, // Use converted ISO string (or undefined)
+         actualDelivery, // Use converted ISO string (or undefined)
+         history, // Use processed history array
        });
      });
      console.log(`Fetched ${shipments.length} shipments.`);
@@ -79,6 +99,7 @@ async function getShipments(): Promise<{ shipments: Shipment[]; error?: string }
    }
 }
 
+// Status variant logic remains the same
 const getShipmentStatusVariant = (status: string): "default" | "secondary" | "outline" | "destructive" => {
   switch (status?.toLowerCase()) {
     case 'label created':
@@ -121,18 +142,21 @@ export default function LogisticsPage() {
     fetchData();
   }, []); // Empty dependency array
 
-  // Calculate unique carriers
-  const uniqueCarriers = React.useMemo(() => Array.from(new Set(shipments.map(s => s.carrier))).filter(Boolean), [shipments]);
+  // Calculate unique carriers from fetched data
+  const uniqueCarriers = React.useMemo(() => Array.from(new Set(shipments.map(s => s.carrier).filter(Boolean))), [shipments]);
 
-  // Filter shipments
+  // Filter shipments based on search and select filters
   const filteredShipments = React.useMemo(() => {
     return shipments.filter(shipment => {
+      const searchLower = searchQuery.toLowerCase();
       const matchesSearch = searchQuery === "" ||
-        shipment.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        shipment.orderId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        shipment.trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        shipment.customerName.toLowerCase().includes(searchQuery.toLowerCase()); // Add customer name search
-      const matchesStatus = selectedStatus === "all" || shipment.status.toLowerCase() === selectedStatus.toLowerCase();
+        (shipment.id && shipment.id.toLowerCase().includes(searchLower)) ||
+        (shipment.orderId && shipment.orderId.toLowerCase().includes(searchLower)) ||
+        (shipment.trackingNumber && shipment.trackingNumber.toLowerCase().includes(searchLower)) ||
+        (shipment.customerName && shipment.customerName.toLowerCase().includes(searchLower)) ||
+        (shipment.destination && shipment.destination.toLowerCase().includes(searchLower)); // Add destination search
+
+      const matchesStatus = selectedStatus === "all" || (shipment.status && shipment.status.toLowerCase() === selectedStatus.toLowerCase());
       const matchesCarrier = selectedCarrier === "all" || shipment.carrier === selectedCarrier;
       return matchesSearch && matchesStatus && matchesCarrier;
     });
@@ -142,8 +166,9 @@ export default function LogisticsPage() {
     <div className="container mx-auto py-6 animate-subtle-fade-in space-y-8">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <h1 className="text-4xl font-bold text-foreground">Logistics</h1>
-        <Button disabled className="btn-primary-gradient"> {/* Disabled until implemented */}
-          <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Shipment (soon)
+        {/* Button remains disabled as shipment creation is now tied to order creation */}
+        <Button disabled className="btn-primary-gradient">
+          <PlusCircle className="mr-2 h-4 w-4" /> Schedule New Shipment (Auto)
         </Button>
       </div>
 
@@ -174,7 +199,7 @@ export default function LogisticsPage() {
            <div className="relative flex-grow w-full md:w-auto">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
              <Input
-               placeholder="Search by ID, Tracking, Customer..."
+               placeholder="Search ID, Order, Tracking, Customer, Dest..."
                className="pl-10"
                value={searchQuery}
                onChange={(e) => setSearchQuery(e.target.value)}
@@ -193,6 +218,7 @@ export default function LogisticsPage() {
                  </SelectTrigger>
                  <SelectContent>
                    <SelectItem value="all">All Statuses</SelectItem>
+                    {/* Use the defined statuses from the schema */}
                     {ShipmentSchema.shape.status.options.map(status => (
                         <SelectItem key={status} value={status.toLowerCase()}>{status}</SelectItem>
                     ))}
@@ -291,11 +317,12 @@ export default function LogisticsPage() {
                          {shipment.orderId.substring(0, 8)}...
                        </Link>
                     </TableCell>
-                   <TableCell>{shipment.carrier}</TableCell>
+                   <TableCell>{shipment.carrier || 'N/A'}</TableCell>
                    <TableCell>
                       <span title={shipment.trackingNumber} className="flex items-center gap-1">
-                         {shipment.trackingNumber.substring(0, 10)}...
-                          <Navigation className="inline h-3 w-3 ml-1 text-muted-foreground" />
+                         {shipment.trackingNumber?.substring(0, 10)}...
+                          {/* Add condition to show icon only if tracking number exists */}
+                          {shipment.trackingNumber && shipment.trackingNumber !== 'Pending' && <Navigation className="inline h-3 w-3 ml-1 text-muted-foreground" />}
                       </span>
                     </TableCell>
                     <TableCell className="truncate max-w-xs" title={shipment.destination}>{shipment.destination}</TableCell>
@@ -316,10 +343,12 @@ export default function LogisticsPage() {
                          <DropdownMenuItem asChild>
                             <Link href={`/logistics/${shipment.id}`}>View Details</Link>
                         </DropdownMenuItem>
-                         <DropdownMenuItem disabled>Update Status (soon)</DropdownMenuItem>
+                         <DropdownMenuItem disabled>Update Status (use detail page)</DropdownMenuItem>
                          <DropdownMenuItem disabled>Print Label (soon)</DropdownMenuItem>
                          <DropdownMenuSeparator />
-                          <DropdownMenuItem disabled>Track Package (soon)</DropdownMenuItem>
+                          <DropdownMenuItem disabled={!shipment.trackingNumber || shipment.trackingNumber === 'Pending'}>
+                              Track Package (soon)
+                          </DropdownMenuItem>
                        </DropdownMenuContent>
                      </DropdownMenu>
                    </TableCell>
@@ -337,7 +366,7 @@ export default function LogisticsPage() {
               <p className="text-sm mt-2">
                  {searchQuery || selectedStatus !== 'all' || selectedCarrier !== 'all'
                    ? "Try adjusting your search or filters."
-                   : "Shipments will appear here once created."}
+                   : "Shipments are automatically created when orders are placed."}
               </p>
             </div>
          </Card>
@@ -352,4 +381,5 @@ export default function LogisticsPage() {
 // };
 
 // export const dynamic = 'force-dynamic';
+
 

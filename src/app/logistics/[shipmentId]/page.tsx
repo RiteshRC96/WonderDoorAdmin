@@ -38,15 +38,15 @@ async function getShipmentDetails(shipmentId: string): Promise<{ shipment: Shipm
       const data = docSnap.data() as Omit<Shipment, 'id' | 'createdAt' | 'updatedAt' | 'actualDelivery' | 'history'> & {
            createdAt?: Timestamp,
            updatedAt?: Timestamp,
-           actualDelivery?: Timestamp,
-           history?: { timestamp: Timestamp | string }[] // Handle potential mixed types
+           actualDelivery?: Timestamp | null, // Can be Timestamp or null
+           history?: { timestamp: Timestamp | string, status: string, location?: string, notes?: string }[] // Handle potential mixed types
          };
 
 
-       // Convert Timestamps to ISO strings
-       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString();
+       // Convert Timestamps to ISO strings, handle null actualDelivery
+       const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString(); // Fallback
        const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
-       const actualDelivery = data.actualDelivery instanceof Timestamp ? data.actualDelivery.toDate().toISOString() : undefined;
+       const actualDelivery = data.actualDelivery instanceof Timestamp ? data.actualDelivery.toDate().toISOString() : null; // Keep null if null
 
        // Ensure history timestamps are strings and sort descending
         const history = (data.history || [])
@@ -54,18 +54,29 @@ async function getShipmentDetails(shipmentId: string): Promise<{ shipment: Shipm
            ...event,
            timestamp: event.timestamp instanceof Timestamp
                ? event.timestamp.toDate().toISOString()
-               : typeof event.timestamp === 'string' ? event.timestamp : new Date().toISOString()
+               : typeof event.timestamp === 'string' ? event.timestamp : new Date(0).toISOString() // Fallback for bad data
          }))
          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()); // Sort newest first
 
 
+      // Construct the final Shipment object, ensuring all fields from ShipmentInput are present
       const shipmentData: Shipment = {
         id: docSnap.id,
-        // Need to cast 'data' because TypeScript can't guarantee all fields exist after omit/pick
-        ...(data as ShipmentInput),
+        orderId: data.orderId,
+        customerName: data.customerName,
+        carrier: data.carrier || 'N/A', // Provide fallback
+        trackingNumber: data.trackingNumber || 'N/A', // Provide fallback
+        status: data.status,
+        origin: data.origin,
+        destination: data.destination,
+        estimatedDelivery: data.estimatedDelivery, // Keep as is (optional string)
+        pieces: data.pieces, // Keep as is (optional number)
+        weight: data.weight, // Keep as is (optional string)
+        dimensions: data.dimensions, // Keep as is (optional string)
+        notes: data.notes, // Keep as is (optional string)
         createdAt,
         updatedAt,
-        actualDelivery,
+        actualDelivery, // Pass the potentially null value
         history,
       };
 
@@ -81,7 +92,7 @@ async function getShipmentDetails(shipmentId: string): Promise<{ shipment: Shipm
   }
 }
 
-// Re-use status variant logic
+// Re-use status variant logic - remains the same
 const getShipmentStatusVariant = (status: string): "default" | "secondary" | "outline" | "destructive" => {
    switch (status?.toLowerCase()) {
      case 'label created':
@@ -108,7 +119,6 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
    if (fetchError) {
        return (
         <div className="container mx-auto py-6 space-y-6">
-          {/* Breadcrumbs for Error Page */}
          <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem><BreadcrumbLink asChild><Link href="/"><Home className="h-4 w-4"/></Link></BreadcrumbLink></BreadcrumbItem>
@@ -161,15 +171,14 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
          </Button>
           <div className="flex gap-2">
                {/* Add actual tracking link builder later */}
-              <Button variant="outline" size="sm" disabled>
+              <Button
+                 variant="outline"
+                 size="sm"
+                 disabled={!shipment.trackingNumber || shipment.trackingNumber === 'Pending'} // Disable if no tracking#
+               >
                   <Navigation className="mr-2 h-4 w-4" />
                   Track Externally (soon)
               </Button>
-             {/* Edit button removed - status is updated via ShipmentStatusUpdater */}
-             {/* <Button size="sm" disabled>
-                 <Edit className="mr-2 h-4 w-4" />
-                 Update Shipment (soon)
-             </Button> */}
           </div>
        </div>
 
@@ -181,7 +190,7 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
                   <Package className="h-4 w-4"/> For Order <Link href={`/orders/${shipment.orderId}`} className="text-primary hover:underline">{shipment.orderId.substring(0,8)}...</Link>
                 </CardDescription>
                  <CardDescription className="flex items-center gap-2 text-xs text-muted-foreground/80 mt-1">
-                  Created: {format(new Date(shipment.createdAt), 'PP p')}
+                  Created: {shipment.createdAt ? format(new Date(shipment.createdAt), 'PP p') : 'N/A'}
                 </CardDescription>
                  {shipment.updatedAt && shipment.updatedAt !== shipment.createdAt && (
                      <CardDescription className="flex items-center gap-2 text-xs text-muted-foreground/80 mt-1">
@@ -189,17 +198,16 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
                     </CardDescription>
                  )}
             </div>
-            {/* Status Badge Removed - Handled by ShipmentStatusUpdater */}
-            {/* <Badge variant={getShipmentStatusVariant(shipment.status)} className="text-base md:text-lg px-3 py-1 md:px-4 md:py-1.5 whitespace-nowrap shrink-0">{shipment.status}</Badge> */}
+            {/* Status Badge is now part of ShipmentStatusUpdater */}
          </CardHeader>
           <Separator />
           <CardContent className="pt-6 grid md:grid-cols-3 gap-6">
              {/* Shipment Info */}
              <div className="space-y-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2"><Hash className="h-5 w-5 text-muted-foreground" /> Shipment Details</h3>
-                <p className="text-sm"><span className="font-medium text-muted-foreground">Carrier:</span> {shipment.carrier}</p>
-                <p className="text-sm"><span className="font-medium text-muted-foreground">Tracking #:</span> {shipment.trackingNumber}</p>
-                 <p className="text-sm"><span className="font-medium text-muted-foreground">Pieces:</span> {shipment.pieces || 'N/A'}</p>
+                <p className="text-sm"><span className="font-medium text-muted-foreground">Carrier:</span> {shipment.carrier || 'N/A'}</p>
+                <p className="text-sm"><span className="font-medium text-muted-foreground">Tracking #:</span> {shipment.trackingNumber || 'N/A'}</p>
+                 <p className="text-sm"><span className="font-medium text-muted-foreground">Pieces:</span> {shipment.pieces ?? 'N/A'}</p>
                  <p className="text-sm"><span className="font-medium text-muted-foreground">Weight:</span> {shipment.weight || 'N/A'}</p>
                  <p className="text-sm"><span className="font-medium text-muted-foreground">Dimensions:</span> {shipment.dimensions || 'N/A'}</p>
                  {shipment.notes && <p className="text-sm pt-1"><span className="font-medium text-muted-foreground">Notes:</span> {shipment.notes}</p>}
@@ -209,17 +217,18 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
              <div className="space-y-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2"><MapPin className="h-5 w-5 text-muted-foreground" /> Origin & Destination</h3>
                 <p className="text-sm font-medium">From:</p>
-                <p className="text-sm text-muted-foreground">{shipment.origin}</p>
+                <p className="text-sm text-muted-foreground">{shipment.origin || 'N/A'}</p>
                 <p className="text-sm font-medium mt-2">To:</p>
-                <p className="text-sm text-muted-foreground">{shipment.destination}</p>
-                 <p className="text-sm text-muted-foreground"><span className="font-medium">Customer:</span> {shipment.customerName}</p>
+                <p className="text-sm text-muted-foreground">{shipment.destination || 'N/A'}</p>
+                 <p className="text-sm text-muted-foreground"><span className="font-medium">Customer:</span> {shipment.customerName || 'N/A'}</p>
              </div>
 
               {/* Dates */}
              <div className="space-y-2">
                  <h3 className="text-lg font-semibold flex items-center gap-2"><Calendar className="h-5 w-5 text-muted-foreground" /> Dates</h3>
                  <p className="text-sm"><span className="font-medium text-muted-foreground">Est. Delivery:</span> {shipment.estimatedDelivery ? format(new Date(shipment.estimatedDelivery), 'PP') : 'N/A'}</p>
-                 {shipment.actualDelivery ? (
+                 {/* Check if actualDelivery is a valid date string before formatting */}
+                 {shipment.actualDelivery && !isNaN(new Date(shipment.actualDelivery).getTime()) ? (
                      <p className="text-sm"><span className="font-medium text-muted-foreground">Actual Delivery:</span> {format(new Date(shipment.actualDelivery), 'PP p')}</p>
                  ) : (
                     <p className="text-sm text-muted-foreground italic">Not yet delivered.</p>
@@ -274,7 +283,8 @@ export default async function ShipmentDetailPage({ params }: { params: { shipmen
 export async function generateMetadata({ params }: { params: { shipmentId: string } }) {
   const { shipment } = await getShipmentDetails(params.shipmentId);
   return {
-    title: shipment ? `Shipment #${shipment.id} | Showroom Manager` : 'Shipment Not Found | Showroom Manager',
+    title: shipment ? `Shipment #${shipment.id.substring(0,8)}... | Showroom Manager` : 'Shipment Not Found | Showroom Manager',
+    description: shipment ? `Details for shipment ${shipment.id}. Tracking: ${shipment.trackingNumber}` : 'View shipment details.',
   };
 }
 
