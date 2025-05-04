@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -51,9 +52,12 @@ export function AddItemForm() {
       price: 0,
       leadTime: "",
       description: "",
-      imageUrl: "", // Will hold the FINAL download URL from Storage, cleared initially
+      // imageUrl is handled by the server action, don't set default here
+      // imageHint is required by schema, default can be empty string
       imageHint: "",
     },
+    // Trigger validation on blur and change for better UX
+    mode: "onBlur",
   });
 
   // Function to read file as Data URL
@@ -76,6 +80,7 @@ export function AddItemForm() {
      const wasAutoFilled = selectedFileName && currentHint === selectedFileName.split('.').slice(0, -1).join('.').replace(/[^a-zA-Z0-9\s]/g, ' ').substring(0, 50);
      if (wasAutoFilled) {
          form.setValue('imageHint', ''); // Clear auto-filled hint
+         // No need to trigger here, auto-filling shouldn't cause validation errors
      }
 
 
@@ -102,13 +107,18 @@ export function AddItemForm() {
       setSelectedFileName(file.name);
        // Auto-populate imageHint if it's empty
        if (!form.getValues('imageHint')) {
-            form.setValue('imageHint', file.name.split('.').slice(0, -1).join('.').replace(/[^a-zA-Z0-9\s]/g, ' ').substring(0, 50));
-            form.trigger('imageHint'); // Trigger validation if needed
+            // Basic auto-hint based on filename, limited length
+            const autoHint = file.name.split('.').slice(0, -1).join('.').replace(/[^a-zA-Z0-9\s]/g, ' ').substring(0, 50);
+            form.setValue('imageHint', autoHint, { shouldValidate: true }); // Validate after setting hint
        }
 
       try {
+          console.log("Reading file as Data URL...");
           const dataUrl = await readFileAsDataURL(file);
+          console.log("Data URL read successfully (first 100 chars):", dataUrl.substring(0, 100));
           setImageDataUrl(dataUrl); // Store data URL in state temporarily
+          // Clear imageHint error if an image is successfully loaded
+          form.clearErrors('imageHint');
       } catch (error) {
           console.error("Error reading file:", error);
           const errorMsg = "Could not read the selected image file. It might be corrupted or unreadable.";
@@ -122,92 +132,99 @@ export function AddItemForm() {
   };
 
   async function onSubmit(values: AddItemInput) {
+    console.log("Form onSubmit triggered. Values:", values);
     if (fileError) {
          toast({ variant: "destructive", title: "Image Error", description: "Please fix the image selection error before saving." });
          return;
     }
 
-    // Ensure image hint is provided if no image is being uploaded
+    // Trigger validation manually to ensure all fields are checked before submitting
+    const isValid = await form.trigger();
+    if (!isValid) {
+        toast({
+            variant: "destructive",
+            title: "Validation Error",
+            description: "Please check the highlighted fields.",
+        });
+        // Try to focus the first invalid field
+        const firstErrorField = Object.keys(form.formState.errors)[0] as keyof AddItemInput | undefined;
+        if (firstErrorField) {
+            form.setFocus(firstErrorField);
+        }
+        return; // Stop submission if validation fails
+    }
+
+    // Ensure image hint is provided if no image is being uploaded - schema should handle this now, but double-check
     if (!imageDataUrl && !values.imageHint) {
         form.setError('imageHint', { type: 'manual', message: 'Image hint is required if no image is uploaded.' });
         toast({ variant: "destructive", title: "Missing Information", description: "Please provide an image hint if you are not uploading an image." });
-        // Focus the hint input
-         setTimeout(() => {
-              const hintInput = document.querySelector<HTMLInputElement>('input[name="imageHint"]');
-              if (hintInput) hintInput.focus();
-         }, 0);
+         form.setFocus('imageHint');
         return; // Stop submission
     }
 
 
     setIsSubmitting(true);
+    console.log("Submitting form data...");
 
     // Create payload, including the image Data URL IF it exists
-    const payload: AddItemPayload = { // Use AddItemPayload type which includes imageDataUrl
-        ...values,
-        // Pass the Data URL separately for the action to handle
-        imageDataUrl: imageDataUrl || undefined,
-        imageUrl: undefined, // Ensure imageUrl (for final URL) is not submitted from form
+    // Exclude imageUrl from the payload sent to the action, as it's set server-side
+    const { imageUrl, ...formValuesToSend } = values;
+    const payload: AddItemPayload = {
+        ...formValuesToSend,
+        imageDataUrl: imageDataUrl || undefined, // Pass the Data URL if it exists
     };
-     // Remove the property if undefined (action checks for existence)
-    //  if (!payload.imageDataUrl) {
-    //      delete payload.imageDataUrl;
-    //  }
+    console.log("Payload being sent to action:", { ...payload, imageDataUrl: payload.imageDataUrl ? payload.imageDataUrl.substring(0, 100) + '...' : 'None' });
 
 
     try {
-      // The action now handles the upload and gets the final URL
+      console.log("Calling addItemAction...");
       const result = await addItemAction(payload);
+      console.log("Action result:", result);
 
       if (result.success) {
         toast({
           title: "Success!",
           description: result.message,
         });
-        router.push('/inventory');
-        // No need to reset form here, redirect handles it.
+        router.push('/inventory'); // Redirect on success
+        router.refresh(); // Refresh the inventory page data
       } else {
         // Handle validation or other errors from the server action
         if (result.errors) {
+            console.error("Server validation errors:", result.errors);
             let firstErrorField: keyof AddItemInput | null = null;
             Object.entries(result.errors).forEach(([field, messages]) => {
                 const fieldName = field as keyof AddItemInput;
-                if (fieldName in form.getValues() && messages && messages.length > 0) {
-                    form.setError(fieldName, { type: 'manual', message: messages[0] });
+                // Check if the field exists in the form before setting error
+                if (fieldName in form.getValues()) {
+                    form.setError(fieldName, { type: 'server', message: messages?.[0] || "Server validation failed" });
                     if (!firstErrorField) firstErrorField = fieldName;
                 } else {
-                    console.warn(`Received server error for non-form field: ${field}`);
-                     // Display general error if field mapping fails
-                     if(!toast.isActive('general-server-error')){
-                        toast({
-                          id: 'general-server-error',
-                          variant: "destructive",
-                          title: "Server Error",
-                          description: result.message || "An unexpected server error occurred.",
-                       });
-                     }
+                    console.warn(`Received server error for non-form field or unmapped field: ${field}`);
+                    // Show general error for unmapped fields
+                     toast({
+                        variant: "destructive",
+                        title: `Server Error (${field})`,
+                        description: messages?.join(', ') || result.message || "An unexpected server error occurred.",
+                     });
                 }
             });
+
+             const generalErrorMessage = result.message || "Please check the form fields for errors.";
+             toast({
+                 variant: "destructive",
+                 title: "Submission Failed",
+                 description: generalErrorMessage,
+             });
+
+            // Focus the first field with a server error
             if (firstErrorField) {
-                 setTimeout(() => {
-                      const firstErrorElement = document.querySelector<HTMLElement>(`[aria-invalid="true"]`);
-                      if (firstErrorElement) firstErrorElement.focus();
-                 }, 0);
-                 toast({
-                    variant: "destructive",
-                    title: "Validation Error",
-                    description: result.message || "Please check the form fields.",
-                 });
-            } else {
-                // If errors object exists but doesn't map to fields, show general error
-                toast({
-                    variant: "destructive",
-                    title: "Error",
-                    description: result.message || "An unexpected error occurred during save.",
-                });
+                form.setFocus(firstErrorField);
             }
+
         } else {
             // General error message if no specific errors object
+            console.error("Server error without specific field errors:", result.message);
             toast({
                 variant: "destructive",
                 title: "Error",
@@ -216,13 +233,14 @@ export function AddItemForm() {
         }
       }
     } catch (error) {
-       console.error("Submission error:", error);
+       console.error("Submission error caught in component:", error);
        toast({
          variant: "destructive",
          title: "Submission Error",
-         description: "An unexpected error occurred. Please try again.",
+         description: "An unexpected client-side error occurred. Please try again.",
        });
     } finally {
+        console.log("Setting isSubmitting to false.");
         setIsSubmitting(false);
     }
   }
@@ -230,7 +248,7 @@ export function AddItemForm() {
   return (
     <Card className="max-w-4xl mx-auto shadow-md">
       <CardHeader>
-        <CardDescription>Fill in the details below to add a new item to your inventory catalog.</CardDescription>
+        <CardDescription>Fill in the details below to add a new item to your inventory catalog. Fields marked with * are required.</CardDescription>
       </CardHeader>
        <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -357,7 +375,8 @@ export function AddItemForm() {
                       <FormItem>
                         <FormLabel>Stock Quantity *</FormLabel>
                         <FormControl>
-                          <Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseInt(e.target.value, 10) || 0)} aria-invalid={!!form.formState.errors.stock}/>
+                          {/* Ensure value is handled correctly for controlled number input */}
+                          <Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} aria-invalid={!!form.formState.errors.stock}/>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -370,7 +389,8 @@ export function AddItemForm() {
                       <FormItem>
                         <FormLabel>Price ($) *</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} aria-invalid={!!form.formState.errors.price}/>
+                          {/* Ensure value is handled correctly for controlled number input */}
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseFloat(e.target.value))} aria-invalid={!!form.formState.errors.price}/>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -428,7 +448,11 @@ export function AddItemForm() {
                      name="imageHint"
                      render={({ field }) => (
                        <FormItem>
-                         <FormLabel>Image Hint *</FormLabel>
+                         {/* Label required asterisk logic */}
+                         <FormLabel>
+                            Image Hint *
+                            {!imageDataUrl && <span className="text-destructive ml-1">(Required if no image uploaded)</span>}
+                          </FormLabel>
                          <FormControl>
                            <Input placeholder="e.g., modern oak door, minimalist sofa" {...field} aria-invalid={!!form.formState.errors.imageHint} required={!imageDataUrl} aria-required={!imageDataUrl}/>
                          </FormControl>
@@ -465,3 +489,4 @@ export function AddItemForm() {
     </Card>
   );
 }
+

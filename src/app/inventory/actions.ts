@@ -42,13 +42,16 @@ function checkFirebaseInitialization() {
 
 // Server Action to add a new inventory item to Firestore, potentially uploading an image
 export async function addItemAction(payload: AddItemPayload): Promise<{ success: boolean; message: string; itemId?: string; errors?: Record<string, string[]> | null }> {
+  console.log("addItemAction started. Received payload keys:", Object.keys(payload));
   const firebaseCheck = checkFirebaseInitialization();
   if (!firebaseCheck.initialized) {
+    console.error("Firebase initialization check failed.");
     return { success: false, message: firebaseCheck.message, errors: null };
   }
 
   // Separate imageDataUrl from the rest of the data for validation
   const { imageDataUrl, ...itemData } = payload;
+  console.log("Item data for validation (excluding image data URL):", itemData);
 
   const validationResult = AddItemSchema.safeParse(itemData);
 
@@ -60,9 +63,12 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
       errors: validationResult.error.flatten().fieldErrors,
     };
   }
+   console.log("Validation successful.");
+   const validatedData = validationResult.data;
 
     // Double-check image hint requirement if no image data URL is present
-   if (!imageDataUrl && !validationResult.data.imageHint) {
+   if (!imageDataUrl && !validatedData.imageHint) {
+       console.error("Validation Error: Image hint required when no image uploaded.");
        return {
          success: false,
          message: "Image hint is required if no image is uploaded.",
@@ -76,8 +82,8 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
   // --- Handle Image Upload ---
   // Use && instead of &amp;&amp;
   if (imageDataUrl && storage) { // Ensure storage is initialized
+      console.log("Image data URL provided, attempting upload...");
       try {
-          console.log("Image data URL provided, attempting upload...");
           // Validate Data URL format (basic check)
           const match = imageDataUrl.match(/^data:(image\/(.+));base64,(.*)$/);
            if (!match) {
@@ -91,10 +97,11 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
            if (!base64Data) {
                 throw new Error("Could not extract Base64 data from Data URL.");
            }
+            console.log(`Image details: MIME Type=${mimeType}, Extension=${fileExtension}, Base64 Length=${base64Data.length}`);
 
           // Generate a unique filename (e.g., using SKU and timestamp)
           // Use forward slashes for Storage paths
-          const fileName = `inventory/${validationResult.data.sku || 'unknown_sku'}_${Date.now()}.${fileExtension}`;
+          const fileName = `inventory/${validatedData.sku || 'unknown_sku'}_${Date.now()}.${fileExtension}`;
           const imageStorageRef = storageRef(storage, fileName);
 
           console.log(`Uploading image to Storage path: ${fileName}`);
@@ -103,7 +110,7 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
           const uploadResult = await uploadString(imageStorageRef, base64Data, 'base64', {
              contentType: mimeType // Set content type for proper handling
           });
-          console.log("Image uploaded successfully to Storage.");
+          console.log("Image uploaded successfully to Storage. Path:", uploadResult.ref.fullPath);
 
           // Get the public download URL
           finalImageUrl = await getDownloadURL(uploadResult.ref);
@@ -141,12 +148,15 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
            message: "Image upload failed because Storage is not configured correctly.",
            errors: { imageUrl: ["Storage configuration error."] }
        };
+  } else {
+     console.log("No image data URL provided or storage not initialized, skipping image upload.");
   }
 
 
   // Prepare the final data for Firestore, including the obtained imageUrl
+  // Important: Use the validatedData from the schema result
   const newItemData = {
-      ...validationResult.data,
+      ...validatedData, // Use data parsed by Zod
       imageUrl: finalImageUrl, // Use the URL from Storage or undefined if no upload
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -157,16 +167,21 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
         const typedKey = key as keyof typeof newItemData;
         // Keep imageUrl even if undefined initially, it might be set by upload
         if (typedKey !== 'imageUrl' && (newItemData[typedKey] === undefined || newItemData[typedKey] === "")) {
+           console.log(`Removing empty/undefined field: ${typedKey}`);
            delete newItemData[typedKey];
         }
         // Explicitly remove imageUrl if it ended up undefined after potential upload attempt or no upload happened
         if(typedKey === 'imageUrl' && newItemData[typedKey] === undefined) {
+            console.log("Removing undefined imageUrl field.");
             delete newItemData[typedKey];
         }
    });
 
   try {
-    console.log("Attempting to add item document to Firestore with data keys:", JSON.stringify(Object.keys(newItemData)));
+    console.log("Attempting to add item document to Firestore with data keys:", JSON.stringify(Object.keys(newItemData)), "Data snippet:", JSON.stringify(newItemData).substring(0, 200));
+    if (!db) {
+        throw new Error("Firestore database instance (db) is null. Cannot add document.");
+    }
     const inventoryCollectionRef = collection(db, 'inventory');
     const docRef = await addDoc(inventoryCollectionRef, newItemData);
 
@@ -188,9 +203,10 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
      let errorCode = "UNKNOWN"; // Default error code
 
      if (error instanceof Error) {
-         const firestoreError = error as any;
+         const firestoreError = error as any; // Cast to any to check for 'code' potentially
          if (firestoreError.code) {
             errorCode = firestoreError.code;
+            console.error(`Firestore Error (${firestoreError.code}):`, error.message, error.stack);
             // ... [existing Firestore error handling switch case] ...
             switch (firestoreError.code) {
                  case 'permission-denied':
@@ -214,13 +230,13 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
                       errorMessage = `Firestore error (${firestoreError.code}): ${firestoreError.message}`;
                       break;
             }
-            console.error(`Firestore Error (${firestoreError.code}):`, error);
          } else {
             errorMessage = `Error adding item document: ${error.message}`;
-            console.error("Error adding item to Firestore:", error);
+            console.error("Error adding item to Firestore (non-Firestore error or code missing):", error.message, error.stack);
          }
      } else {
-        console.error("An unexpected error occurred:", error);
+        console.error("An unexpected non-Error object was thrown:", error);
+        errorMessage = "An unexpected error occurred while saving the item.";
      }
 
      // Attempt to clean up uploaded image if Firestore add fails
@@ -281,7 +297,7 @@ export async function updateItemAction(
   // Prepare the data for Firestore update
   // WARNING: Image update/delete logic is NOT implemented here yet.
   // It only updates fields present in AddItemSchema.
-  const itemDataToUpdate: Partial<AddItemPayload & { updatedAt: any }> = {
+  const itemDataToUpdate: Partial<AddItemInput & { updatedAt: any }> = {
     ...validationResult.data,
     // imageUrl: validationResult.data.imageUrl || undefined, // Keep existing or newly entered URL for now
     updatedAt: serverTimestamp(),
@@ -403,6 +419,7 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
             const docSnap = await getDoc(itemDocRef);
             if (docSnap.exists()) {
                 imageUrlToDelete = docSnap.data()?.imageUrl;
+                 console.log(`Found image URL to delete: ${imageUrlToDelete}`);
             } else {
                 console.log(`Item ${itemId} not found in Firestore, cannot delete.`);
                  // Return success=false or a specific message if the item doesn't exist
@@ -495,3 +512,4 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
     };
   }
 }
+
