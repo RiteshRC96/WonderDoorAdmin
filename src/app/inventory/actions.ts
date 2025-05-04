@@ -3,17 +3,26 @@
 
 import { revalidatePath } from 'next/cache';
 import { AddItemSchema, type AddItemInput } from '@/schemas/inventory';
-import { db, collection, addDoc, doc, deleteDoc } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
+import { db, collection, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, Timestamp } from '@/lib/firebase/firebase'; // Import Firestore instance and functions
+
+// Helper function to check Firestore initialization
+function checkFirestoreInitialization() {
+  if (!db) {
+    const errorMessage = "Firestore database is not initialized. Check Firebase configuration. Operation cannot proceed.";
+    console.error(errorMessage);
+    return { initialized: false, message: "Database configuration error. Unable to proceed." };
+  }
+  return { initialized: true, message: "" };
+}
+
 
 // Server Action to add a new inventory item to Firestore
 export async function addItemAction(data: AddItemInput): Promise<{ success: boolean; message: string; itemId?: string; errors?: Record<string, string[]> | null }> {
-  // Ensure Firestore is initialized before proceeding
-  if (!db) {
-    const errorMessage = "Firestore database is not initialized. Check Firebase configuration in .env.local and restart the server. Cannot add item.";
-    console.error(errorMessage);
+  const dbCheck = checkFirestoreInitialization();
+  if (!dbCheck.initialized) {
     return {
       success: false,
-      message: "Database configuration error. Unable to add item.", // Keep UI message simpler
+      message: dbCheck.message,
       errors: null,
     };
   }
@@ -34,7 +43,8 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
       ...validationResult.data,
       // Ensure undefined is not stored if imageUrl is empty
       imageUrl: validationResult.data.imageUrl === "" ? undefined : validationResult.data.imageUrl,
-      createdAt: new Date(), // Add a timestamp
+      createdAt: serverTimestamp(), // Add a server timestamp on creation
+      updatedAt: serverTimestamp(), // Also set updatedAt on creation
   };
   // Remove empty optional fields before sending to Firestore
   Object.keys(newItemData).forEach(key => {
@@ -66,8 +76,6 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
   } catch (error) {
      const errorMessage = `Error adding item to Firestore: ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMessage);
-    // Check if the error is a Firestore specific error if needed
-    // Example: if (error instanceof FirestoreError) { ... }
     return {
       success: false,
       message: "Failed to add item due to a database error. Please try again.", // Keep UI message simple
@@ -76,20 +84,89 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
   }
 }
 
-
-// Server Action to delete an inventory item from Firestore
-export async function deleteItemAction(itemId: string): Promise<{ success: boolean; message: string; }> {
-  if (!itemId) {
-      return { success: false, message: "Item ID is required." };
+// Server Action to update an existing inventory item in Firestore
+export async function updateItemAction(
+  itemId: string,
+  data: AddItemInput
+): Promise<{ success: boolean; message: string; errors?: Record<string, string[]> | null }> {
+  const dbCheck = checkFirestoreInitialization();
+  if (!dbCheck.initialized) {
+    return {
+      success: false,
+      message: dbCheck.message,
+      errors: null,
+    };
   }
-  // Ensure Firestore is initialized before proceeding
-  if (!db) {
-    const errorMessage = "Firestore database is not initialized. Check Firebase configuration. Cannot delete item.";
+
+  if (!itemId) {
+      return { success: false, message: "Item ID is required for update.", errors: null };
+  }
+
+  const validationResult = AddItemSchema.safeParse(data);
+
+  if (!validationResult.success) {
+    console.error("Validation Errors:", validationResult.error.flatten().fieldErrors);
+    return {
+      success: false,
+      message: "Validation failed. Please check the form fields.",
+      errors: validationResult.error.flatten().fieldErrors,
+    };
+  }
+
+  // Prepare the data for Firestore update
+  const itemDataToUpdate = {
+    ...validationResult.data,
+    imageUrl: validationResult.data.imageUrl === "" ? undefined : validationResult.data.imageUrl,
+    updatedAt: serverTimestamp(), // Update the timestamp
+  };
+  // Remove empty optional fields before sending to Firestore
+  Object.keys(itemDataToUpdate).forEach(key => {
+    if (itemDataToUpdate[key as keyof typeof itemDataToUpdate] === undefined || itemDataToUpdate[key as keyof typeof itemDataToUpdate] === "") {
+      delete itemDataToUpdate[key as keyof typeof itemDataToUpdate];
+    }
+  });
+
+  try {
+    console.log(`Attempting to update item with ID: ${itemId}`);
+    const itemDocRef = doc(db, 'inventory', itemId);
+    await updateDoc(itemDocRef, itemDataToUpdate);
+
+    console.log(`Successfully updated item with ID: ${itemId}`);
+
+    // Revalidate relevant paths
+    revalidatePath('/inventory'); // Revalidate the list page
+    revalidatePath(`/inventory/${itemId}`); // Revalidate the detail page
+    revalidatePath(`/inventory/${itemId}/edit`); // Revalidate the edit page itself
+
+    return {
+      success: true,
+      message: `Item '${itemDataToUpdate.name}' updated successfully!`,
+    };
+
+  } catch (error) {
+    const errorMessage = `Error updating item in Firestore (ID: ${itemId}): ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMessage);
     return {
       success: false,
-      message: "Database configuration error. Unable to delete item.",
+      message: "Failed to update item due to a database error. Please try again.",
+      errors: null,
     };
+  }
+}
+
+
+// Server Action to delete an inventory item from Firestore
+export async function deleteItemAction(itemId: string): Promise<{ success: boolean; message: string; }> {
+  const dbCheck = checkFirestoreInitialization();
+  if (!dbCheck.initialized) {
+    return {
+      success: false,
+      message: dbCheck.message,
+    };
+  }
+
+  if (!itemId) {
+      return { success: false, message: "Item ID is required." };
   }
 
   try {
@@ -99,6 +176,8 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
     console.log(`Successfully deleted item with ID: ${itemId}`);
 
     revalidatePath('/inventory'); // Revalidate the inventory list
+    revalidatePath(`/inventory/${itemId}`); // Revalidate the detail page (will result in 404)
+     // No need to revalidate edit page as it won't exist anymore
 
     return { success: true, message: "Item deleted successfully." };
 
