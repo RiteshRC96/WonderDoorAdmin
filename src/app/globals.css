@@ -10,76 +10,80 @@ body {
 
 @layer base {
   :root {
-    /* Light Theme - Lime Green and White */
+    /* Light Theme - Lime Green (#D2F898), Near White (#FCFCFC), Dark Muted Greens (#4A5043, #3C493F) */
     --background: 0 0% 99%; /* Near White (#FCFCFC) */
     --background-gradient-end: 0 0% 97%; /* Slightly darker near white */
-    --foreground: 210 15% 25%; /* Dark Blue Gray */
+    --foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
     --card: 0 0% 100%; /* White */
-    --card-foreground: 210 15% 25%; /* Dark Blue Gray */
+    --card-foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
     --popover: 0 0% 100%; /* White */
-    --popover-foreground: 210 15% 25%; /* Dark Blue Gray */
+    --popover-foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
     --primary: 81 87% 78%; /* Light Lime Green (#D2F898) */
     --primary-foreground: 81 87% 15%; /* Dark Green */
-    --secondary: 210 10% 90%; /* Light Muted Grey */
-    --secondary-foreground: 210 10% 30%; /* Dark Muted Grey */
+    --secondary: 80 6% 90%; /* Light muted grey-green */
+    --secondary-foreground: 80 6% 27%; /* Dark Muted Green (#4A5043) */
+    --muted: 80 6% 90%; /* Same as secondary background */
+    --muted-foreground: 80 6% 40%; /* Slightly darker muted green-grey */
     --accent: 81 90% 92%; /* Very Light Green */
     --accent-foreground: 81 90% 20%; /* Dark Green */
     --destructive: 0 80% 65%; /* Brighter Red */
     --destructive-foreground: 0 0% 98%;
-    --border: 210 20% 88%; /* Light Blue Gray Border */
-    --input: 210 30% 96%; /* Slightly off-white input */
-    --ring: 81 87% 78%; /* Light Lime Green for ring */
+    --border: 80 6% 88%; /* Light grey-green border */
+    --input: 80 6% 96%; /* Slightly off-white input, grey-green tint */
+    --ring: 81 87% 78%; /* Primary color for ring */
     --chart-1: 81 87% 78%; /* Light Lime Green */
-    --chart-2: 210 15% 60%; /* Medium Grey/Blue */
+    --chart-2: 80 6% 60%; /* Medium Grey/Green */
     --chart-3: 81 60% 65%; /* Muted Green */
-    --chart-4: 210 20% 70%; /* Lighter Grey/Blue */
+    --chart-4: 80 6% 70%; /* Lighter Grey/Green */
     --chart-5: 81 70% 85%; /* Pale Green */
     --radius: 0.5rem;
     /* Sidebar colors adjusted for new theme */
     --sidebar-background: 0 0% 98%; /* Slightly Off-white */
-    --sidebar-foreground: 210 15% 25%; /* Darker Gray Blue */
-    --sidebar-primary: 81 87% 78%; /* Light Lime Green */
+    --sidebar-foreground: 94 7% 26%; /* Dark Muted Green (#3C493F) */
+    --sidebar-primary: 81 87% 78%; /* Light Lime Green (#D2F898) */
     --sidebar-primary-foreground: 81 87% 15%; /* Dark Green */
     --sidebar-accent: 81 90% 94%; /* Very Light Lime Accent */
     --sidebar-accent-foreground: 81 90% 20%; /* Darker Green */
-    --sidebar-border: 210 15% 90%; /* Light Gray Border */
+    --sidebar-border: 80 6% 90%; /* Light grey-green border */
     --sidebar-ring: 81 87% 78%; /* Light Lime Green */
   }
   .dark {
-    /* Dark Theme - Dark Green/Grey and White Text */
-    --background: 80 10% 10%; /* Very Dark Desaturated Green/Grey */
-    --background-gradient-end: 80 10% 8%; /* Slightly darker background */
+    /* Dark Theme - Lime Green (#D2F898), Near White (#FCFCFC), Dark Muted Greens (#4A5043, #3C493F) */
+    --background: 94 7% 26%; /* Dark Muted Green (#3C493F) */
+    --background-gradient-end: 94 7% 22%; /* Slightly darker background */
     --foreground: 0 0% 99%; /* Near White (#FCFCFC) */
-    --card: 80 10% 15%; /* Slightly Lighter Dark Green/Grey */
-    --card-foreground: 0 0% 99%; /* Near White */
-    --popover: 80 10% 12%; /* Darker Popover */
-    --popover-foreground: 0 0% 99%; /* Near White */
-    --primary: 81 87% 85%; /* Brighter Lime Green */
+    --card: 80 6% 27%; /* Dark Muted Green (#4A5043) */
+    --card-foreground: 0 0% 99%; /* Near White (#FCFCFC) */
+    --popover: 94 7% 20%; /* Slightly darker than background */
+    --popover-foreground: 0 0% 99%; /* Near White (#FCFCFC) */
+    --primary: 81 87% 85%; /* Brighter Lime Green (Lighter version of #D2F898) */
     --primary-foreground: 81 87% 10%; /* Very Dark Green */
-    --secondary: 80 8% 20%; /* Dark Muted Green/Grey */
-    --secondary-foreground: 80 8% 80%; /* Light Grey/Green */
+    --secondary: 80 6% 35%; /* Slightly lighter dark green/grey */
+    --secondary-foreground: 0 0% 90%; /* Lighter grey */
+    --muted: 80 6% 35%; /* Same as secondary background */
+    --muted-foreground: 0 0% 60%; /* Medium Grey */
     --accent: 81 70% 60%; /* Darker Lime Green */
     --accent-foreground: 81 70% 95%; /* Very Light Lime Green */
     --destructive: 0 70% 55%; /* Vivid Red */
     --destructive-foreground: 0 0% 98%;
-    --border: 80 10% 25%; /* Medium Dark Green/Grey Border */
-    --input: 80 10% 20%; /* Medium Dark Green/Grey Input */
+    --border: 80 6% 35%; /* Slightly lighter dark green/grey border */
+    --input: 80 6% 30%; /* Slightly darker than card */
     --ring: 81 90% 88%; /* Brighter Lime Green Ring */
     /* Chart colors adjusted for dark theme */
     --chart-1: 81 87% 85%; /* Brighter Lime Green */
-    --chart-2: 210 15% 70%; /* Lighter Grey/Blue */
+    --chart-2: 80 15% 70%; /* Lighter Grey/Green */
     --chart-3: 81 60% 75%; /* Brighter Muted Green */
-    --chart-4: 210 20% 80%; /* Very Light Grey/Blue */
+    --chart-4: 80 20% 80%; /* Very Light Grey/Green */
     --chart-5: 81 70% 90%; /* Very Pale Green */
     --radius: 0.5rem;
     /* Dark Sidebar colors adjusted */
-    --sidebar-background: 80 10% 12%; /* Very Dark Green/Grey */
+    --sidebar-background: 94 7% 22%; /* Darker Muted Green */
     --sidebar-foreground: 0 0% 98%; /* Near White */
     --sidebar-primary: 81 87% 85%; /* Brighter Lime Green */
     --sidebar-primary-foreground: 81 87% 10%; /* Very Dark Green */
-    --sidebar-accent: 81 15% 25%; /* Dark Lime Accent */
+    --sidebar-accent: 81 15% 40%; /* Darker Lime Accent */
     --sidebar-accent-foreground: 81 80% 90%; /* Lighter Lime Green */
-    --sidebar-border: 80 10% 28%; /* Medium Dark Green/Grey Border */
+    --sidebar-border: 80 6% 38%; /* Slightly lighter dark green/grey border */
     --sidebar-ring: 81 90% 88%; /* Brighter Lime Ring */
   }
 }
