@@ -1,4 +1,3 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -41,32 +40,36 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
   // Prepare the data for Firestore
   const newItemData = {
       ...validationResult.data,
-      // Ensure undefined is not stored if imageUrl is empty
-      imageUrl: validationResult.data.imageUrl === "" ? undefined : validationResult.data.imageUrl,
-      createdAt: serverTimestamp(), // Add a server timestamp on creation
-      updatedAt: serverTimestamp(), // Also set updatedAt on creation
+      // imageUrl might be a data URL or undefined
+      imageUrl: validationResult.data.imageUrl || undefined,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
   };
-  // Remove empty optional fields before sending to Firestore
-  Object.keys(newItemData).forEach(key => {
-    if (newItemData[key as keyof typeof newItemData] === undefined || newItemData[key as keyof typeof newItemData] === "") {
-      delete newItemData[key as keyof typeof newItemData];
-    }
-  });
 
+  // Remove empty/undefined optional fields before sending to Firestore
+  // Ensure imageUrl is truly removed if it's an empty string or undefined
+   Object.keys(newItemData).forEach(key => {
+      const typedKey = key as keyof typeof newItemData;
+      if (newItemData[typedKey] === undefined || newItemData[typedKey] === "") {
+           // Special check for imageUrl to ensure undefined is used if empty
+          if (typedKey === 'imageUrl') {
+              delete newItemData.imageUrl;
+          } else if (newItemData[typedKey] === "") { // Delete other empty strings if needed
+             delete newItemData[typedKey];
+          }
+      }
+    });
 
   try {
     console.log("Attempting to add item to Firestore...");
-    // Add the new item document to the 'inventory' collection
     const inventoryCollectionRef = collection(db, 'inventory');
     const docRef = await addDoc(inventoryCollectionRef, newItemData);
 
     console.log(`Successfully added item with ID: ${docRef.id}`);
 
     // Revalidate the inventory list page cache to show the new item
-    revalidatePath('/inventory'); // Revalidate the main inventory listing page
+    revalidatePath('/inventory');
 
-
-    // Return success and the actual document ID
     return {
       success: true,
       message: `Item '${newItemData.name}' added successfully!`,
@@ -76,10 +79,18 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
   } catch (error) {
      const errorMessage = `Error adding item to Firestore: ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMessage);
+    // Check for large data URL error (Firestore has document size limits)
+    if (errorMessage.includes('ENTITY_TOO_LARGE') || errorMessage.includes('maximum size')) {
+        return {
+          success: false,
+          message: "Failed to add item. The image file might be too large. Please use a smaller image (e.g., under 1MB).",
+          errors: null,
+        };
+    }
     return {
       success: false,
-      message: "Failed to add item due to a database error. Please try again.", // Keep UI message simple
-      errors: null, // Indicate no specific field errors for a general server error
+      message: "Failed to add item due to a database error. Please try again.",
+      errors: null,
     };
   }
 }
@@ -87,7 +98,7 @@ export async function addItemAction(data: AddItemInput): Promise<{ success: bool
 // Server Action to update an existing inventory item in Firestore
 export async function updateItemAction(
   itemId: string,
-  data: AddItemInput
+  data: AddItemInput // Image uploads are not handled in edit yet, assumes imageUrl is URL or dataURL
 ): Promise<{ success: boolean; message: string; errors?: Record<string, string[]> | null }> {
   const dbCheck = checkFirestoreInitialization();
   if (!dbCheck.initialized) {
@@ -114,29 +125,38 @@ export async function updateItemAction(
   }
 
   // Prepare the data for Firestore update
-  const itemDataToUpdate = {
+  const itemDataToUpdate: Partial<AddItemInput & { updatedAt: any }> = { // Use Partial for update
     ...validationResult.data,
-    imageUrl: validationResult.data.imageUrl === "" ? undefined : validationResult.data.imageUrl,
-    updatedAt: serverTimestamp(), // Update the timestamp
+    imageUrl: validationResult.data.imageUrl || undefined, // Handle optional image URL/Data URL
+    updatedAt: serverTimestamp(),
   };
-  // Remove empty optional fields before sending to Firestore
-  Object.keys(itemDataToUpdate).forEach(key => {
-    if (itemDataToUpdate[key as keyof typeof itemDataToUpdate] === undefined || itemDataToUpdate[key as keyof typeof itemDataToUpdate] === "") {
-      delete itemDataToUpdate[key as keyof typeof itemDataToUpdate];
-    }
-  });
+
+  // Remove empty/undefined fields before sending to Firestore
+   Object.keys(itemDataToUpdate).forEach(key => {
+        const typedKey = key as keyof typeof itemDataToUpdate;
+        if (itemDataToUpdate[typedKey] === undefined || itemDataToUpdate[typedKey] === "") {
+            // Special check for imageUrl to ensure undefined is used if empty
+           if (typedKey === 'imageUrl') {
+               // If imageUrl is empty string, we want to remove it using `delete`
+               // If it's already undefined, delete won't hurt
+               delete itemDataToUpdate.imageUrl;
+           } else if (itemDataToUpdate[typedKey] === "") { // Delete other empty strings if needed
+              delete itemDataToUpdate[typedKey];
+           }
+        }
+      });
 
   try {
     console.log(`Attempting to update item with ID: ${itemId}`);
     const itemDocRef = doc(db, 'inventory', itemId);
-    await updateDoc(itemDocRef, itemDataToUpdate);
+    await updateDoc(itemDocRef, itemDataToUpdate); // Use updateDoc with partial data
 
     console.log(`Successfully updated item with ID: ${itemId}`);
 
     // Revalidate relevant paths
-    revalidatePath('/inventory'); // Revalidate the list page
-    revalidatePath(`/inventory/${itemId}`); // Revalidate the detail page
-    revalidatePath(`/inventory/${itemId}/edit`); // Revalidate the edit page itself
+    revalidatePath('/inventory');
+    revalidatePath(`/inventory/${itemId}`);
+    revalidatePath(`/inventory/${itemId}/edit`);
 
     return {
       success: true,
@@ -146,6 +166,14 @@ export async function updateItemAction(
   } catch (error) {
     const errorMessage = `Error updating item in Firestore (ID: ${itemId}): ${error instanceof Error ? error.message : String(error)}`;
     console.error(errorMessage);
+    // Check for large data URL error during update
+    if (errorMessage.includes('ENTITY_TOO_LARGE') || errorMessage.includes('maximum size')) {
+       return {
+         success: false,
+         message: "Failed to update item. The image data might be too large. Please use a smaller image or URL.",
+         errors: null,
+       };
+     }
     return {
       success: false,
       message: "Failed to update item due to a database error. Please try again.",
@@ -175,8 +203,8 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
     await deleteDoc(itemDocRef);
     console.log(`Successfully deleted item with ID: ${itemId}`);
 
-    revalidatePath('/inventory'); // Revalidate the inventory list
-    revalidatePath(`/inventory/${itemId}`); // Revalidate the detail page (will result in 404)
+    revalidatePath('/inventory');
+    revalidatePath(`/inventory/${itemId}`);
      // No need to revalidate edit page as it won't exist anymore
 
     return { success: true, message: "Item deleted successfully." };
