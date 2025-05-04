@@ -7,23 +7,23 @@ export const inventoryChartConfig = {
   },
   modern: {
     label: "Modern",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--chart-1))", // Now yellow
   },
   classic: {
     label: "Classic",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(var(--chart-2))", // Green
   },
   industrial: {
     label: "Industrial",
-    color: "hsl(var(--chart-3))",
+    color: "hsl(var(--chart-3))", // Blue
   },
   bohemian: {
     label: "Bohemian",
-    color: "hsl(var(--chart-4))",
+    color: "hsl(var(--chart-4))", // Purple
   },
   other: {
     label: "Other",
-    color: "hsl(var(--chart-5))",
+    color: "hsl(var(--chart-5))", // Orange
   },
   uncategorized: { // Added for items without a style
       label: "Uncategorized",
@@ -37,35 +37,35 @@ export const orderStatusChartConfig = {
   },
   processing: {
     label: "Processing",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--chart-1))", // Now yellow
   },
   shipped: {
     label: "Shipped",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(var(--chart-2))", // Green
   },
   delivered: {
     label: "Delivered",
-    color: "hsl(var(--chart-3))",
+    color: "hsl(var(--chart-3))", // Blue
   },
-  pending: { // Renamed from 'pending payment' for simplicity if needed, or add both
+  pending: {
     label: "Pending",
-    color: "hsl(var(--chart-4))",
+    color: "hsl(var(--chart-4))", // Purple
   },
-  'pending payment': { // Keep specific status if used
+  'pending payment': {
     label: "Pending Payment",
-    color: "hsl(var(--chart-4))", // Same color as pending for example
+    color: "hsl(var(--chart-4))", // Purple
   },
   cancelled: {
     label: "Cancelled",
-    color: "hsl(var(--chart-5))",
+    color: "hsl(var(--chart-5))", // Orange
   },
-  paid: { // Added payment statuses if they should be shown
+  paid: {
       label: "Paid",
-      color: "hsl(var(--chart-3))", // Example: Same color as delivered
+      color: "hsl(var(--chart-3))", // Blue (like delivered)
    },
    refunded: {
       label: "Refunded",
-      color: "hsl(var(--chart-5))", // Example: Same color as cancelled
+      color: "hsl(var(--chart-5))", // Orange (like cancelled)
    },
    failed: {
       label: "Failed",

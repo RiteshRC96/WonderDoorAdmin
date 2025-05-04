@@ -10,7 +10,7 @@ body {
 
 @layer base {
   :root {
-    /* Light Theme - Orange */
+    /* Light Theme - Yellowish */
     --background: 0 0% 100%; /* White */
     --background-gradient-end: 0 0% 97%; /* Slightly darker white */
     --foreground: 240 10% 3.9%; /* Near Black */
@@ -18,37 +18,37 @@ body {
     --card-foreground: 240 10% 3.9%; /* Near Black */
     --popover: 0 0% 100%; /* White */
     --popover-foreground: 240 10% 3.9%; /* Near Black */
-    --primary: 24 95% 53%; /* Orange */
-    --primary-foreground: 0 0% 100%; /* White */
+    --primary: 48 96% 53%; /* Yellow */
+    --primary-foreground: 48 96% 10%; /* Dark Yellow/Brown */
     --secondary: 240 4.8% 95.9%; /* Light Gray */
     --secondary-foreground: 240 5.9% 10%; /* Near Black */
     --muted: 240 4.8% 95.9%; /* Light Gray */
     --muted-foreground: 240 3.8% 46.1%; /* Medium Gray */
-    --accent: 240 4.8% 95.9%; /* Light Gray */
-    --accent-foreground: 240 5.9% 10%; /* Near Black */
+    --accent: 48 95% 90%; /* Light Yellow */
+    --accent-foreground: 48 95% 30%; /* Dark Yellow */
     --destructive: 0 84.2% 60.2%; /* Red */
     --destructive-foreground: 0 0% 98%; /* Near White */
     --border: 240 5.9% 90%; /* Gray Border */
     --input: 240 5.9% 90%; /* Gray Input */
-    --ring: 24 95% 53%; /* Orange Ring */
-    --chart-1: 24 95% 53%; /* Orange */
+    --ring: 48 96% 53%; /* Yellow Ring */
+    --chart-1: 48 96% 53%; /* Yellow */
     --chart-2: 120 50% 60%; /* Green */
     --chart-3: 220 70% 65%; /* Blue */
     --chart-4: 300 60% 70%; /* Purple */
-    --chart-5: 50 80% 60%; /* Yellow */
+    --chart-5: 24 80% 60%; /* Orange (for contrast) */
     --radius: 0.5rem;
     /* Sidebar colors adjusted */
     --sidebar-background: 0 0% 98%; /* Slightly Off-white */
     --sidebar-foreground: 240 10% 3.9%; /* Near Black */
-    --sidebar-primary: 24 95% 53%; /* Orange */
-    --sidebar-primary-foreground: 0 0% 100%; /* White */
-    --sidebar-accent: 24 95% 90%; /* Light Orange */
-    --sidebar-accent-foreground: 24 95% 30%; /* Dark Orange */
+    --sidebar-primary: 48 96% 53%; /* Yellow */
+    --sidebar-primary-foreground: 48 96% 10%; /* Dark Yellow/Brown */
+    --sidebar-accent: 48 95% 90%; /* Light Yellow */
+    --sidebar-accent-foreground: 48 95% 30%; /* Dark Yellow */
     --sidebar-border: 240 5.9% 90%; /* Gray Border */
-    --sidebar-ring: 24 95% 53%; /* Orange Ring */
+    --sidebar-ring: 48 96% 53%; /* Yellow Ring */
   }
   .dark {
-    /* Dark Theme - Orange */
+    /* Dark Theme - Yellowish */
     --background: 240 10% 3.9%; /* Near Black */
     --background-gradient-end: 240 10% 6%; /* Slightly lighter black */
     --foreground: 0 0% 98%; /* Near White */
@@ -56,34 +56,34 @@ body {
     --card-foreground: 0 0% 98%; /* Near White */
     --popover: 240 10% 3.9%; /* Near Black */
     --popover-foreground: 0 0% 98%; /* Near White */
-    --primary: 24 95% 60%; /* Brighter Orange */
-    --primary-foreground: 24 95% 10%; /* Very Dark Orange/Brown */
+    --primary: 48 96% 60%; /* Brighter Yellow */
+    --primary-foreground: 48 96% 10%; /* Very Dark Yellow/Brown */
     --secondary: 240 3.7% 15.9%; /* Dark Gray */
     --secondary-foreground: 0 0% 98%; /* Near White */
     --muted: 240 3.7% 15.9%; /* Dark Gray */
     --muted-foreground: 240 5% 64.9%; /* Lighter Gray */
-    --accent: 240 3.7% 15.9%; /* Dark Gray */
-    --accent-foreground: 0 0% 98%; /* Near White */
+    --accent: 48 20% 25%; /* Dark Yellow Accent */
+    --accent-foreground: 48 95% 70%; /* Light Yellow */
     --destructive: 0 72.2% 50.6%; /* Darker Red */
     --destructive-foreground: 0 0% 98%; /* Near White */
     --border: 240 3.7% 15.9%; /* Dark Gray Border */
     --input: 240 3.7% 15.9%; /* Dark Gray Input */
-    --ring: 24 95% 60%; /* Brighter Orange Ring */
-    --chart-1: 24 95% 60%; /* Brighter Orange */
+    --ring: 48 96% 60%; /* Brighter Yellow Ring */
+    --chart-1: 48 96% 60%; /* Brighter Yellow */
     --chart-2: 120 50% 70%; /* Brighter Green */
     --chart-3: 220 70% 75%; /* Brighter Blue */
     --chart-4: 300 60% 80%; /* Brighter Purple */
-    --chart-5: 50 80% 70%; /* Brighter Yellow */
+    --chart-5: 24 80% 70%; /* Brighter Orange */
     --radius: 0.5rem;
     /* Dark Sidebar colors adjusted */
     --sidebar-background: 240 10% 6%; /* Slightly lighter black */
     --sidebar-foreground: 0 0% 98%; /* Near White */
-    --sidebar-primary: 24 95% 60%; /* Brighter Orange */
-    --sidebar-primary-foreground: 24 95% 10%; /* Very Dark Orange/Brown */
-    --sidebar-accent: 24 20% 25%; /* Dark Orange Accent */
-    --sidebar-accent-foreground: 24 95% 70%; /* Light Orange */
+    --sidebar-primary: 48 96% 60%; /* Brighter Yellow */
+    --sidebar-primary-foreground: 48 96% 10%; /* Very Dark Yellow/Brown */
+    --sidebar-accent: 48 20% 25%; /* Dark Yellow Accent */
+    --sidebar-accent-foreground: 48 95% 70%; /* Light Yellow */
     --sidebar-border: 240 3.7% 15.9%; /* Dark Gray Border */
-    --sidebar-ring: 24 95% 60%; /* Brighter Orange Ring */
+    --sidebar-ring: 48 96% 60%; /* Brighter Yellow Ring */
   }
 }
 
