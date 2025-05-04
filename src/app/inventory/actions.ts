@@ -2,7 +2,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { AddItemSchema, type AddItemPayload } from '@/schemas/inventory'; // Use AddItemPayload
+import { AddItemSchema, type AddItemPayload, type AddItemInput } from '@/schemas/inventory'; // Use AddItemPayload
 import {
     db,
     storage, // Import storage
@@ -80,9 +80,8 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
   let finalImageUrl: string | undefined = undefined;
 
   // --- Handle Image Upload ---
-  // Use && instead of &amp;&amp;
   if (imageDataUrl && storage) { // Ensure storage is initialized
-      console.log("Image data URL provided, attempting upload...");
+      console.log("Attempting image upload...");
       try {
           // Validate Data URL format (basic check)
           const match = imageDataUrl.match(/^data:(image\/(.+));base64,(.*)$/);
@@ -178,12 +177,24 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
    });
 
   try {
-    console.log("Attempting to add item document to Firestore with data keys:", JSON.stringify(Object.keys(newItemData)), "Data snippet:", JSON.stringify(newItemData).substring(0, 200));
+    console.log("Preparing item data for Firestore:", newItemData); // Log the data being sent
     if (!db) {
         throw new Error("Firestore database instance (db) is null. Cannot add document.");
     }
     const inventoryCollectionRef = collection(db, 'inventory');
-    const docRef = await addDoc(inventoryCollectionRef, newItemData);
+
+    // Tighter try/catch around addDoc
+    let docRef;
+    try {
+        console.log("Attempting addDoc...");
+        docRef = await addDoc(inventoryCollectionRef, newItemData);
+        console.log("addDoc successful.");
+    } catch(addDocError) {
+        console.error("Error during addDoc operation:", addDocError);
+        // Rethrow or handle specifically if needed
+        throw addDocError;
+    }
+
 
     console.log(`Successfully added item with ID: ${docRef.id}`);
 
@@ -195,6 +206,7 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
       success: true,
       message: `Item '${newItemData.name}' added successfully! ${finalImageUrl ? 'Image uploaded.' : 'No image uploaded.'}`,
       itemId: docRef.id,
+      errors: null, // Ensure errors is explicitly null on success
     };
 
   } catch (error) {
@@ -255,7 +267,7 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
     return {
       success: false,
       message: `${errorMessage} (Code: ${errorCode}). Please try again.`,
-      errors: null, // Or potentially map specific errors if identifiable
+      errors: null, // Return null for errors in the main catch block
     };
   }
 }
@@ -340,6 +352,7 @@ export async function updateItemAction(
     return {
       success: true,
       message: `Item '${itemDataToUpdate.name}' updated successfully!`,
+      errors: null, // Ensure errors is explicitly null on success
     };
 
   } catch (error) {
@@ -513,3 +526,5 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
   }
 }
 
+
+    

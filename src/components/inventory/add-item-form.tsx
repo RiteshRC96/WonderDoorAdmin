@@ -191,7 +191,7 @@ export function AddItemForm() {
       } else {
         // Handle validation or other errors from the server action
         if (result.errors) {
-            console.error("Server validation errors:", result.errors);
+            console.error("Server validation errors:", result.errors); // Log the error object
             let firstErrorField: keyof AddItemInput | null = null;
             Object.entries(result.errors).forEach(([field, messages]) => {
                 const fieldName = field as keyof AddItemInput;
@@ -233,7 +233,7 @@ export function AddItemForm() {
         }
       }
     } catch (error) {
-       console.error("Submission error caught in component:", error);
+       console.error("Submission error caught in component:", error); // Log the actual error
        toast({
          variant: "destructive",
          title: "Submission Error",
@@ -490,3 +490,5 @@ export function AddItemForm() {
   );
 }
 
+
+    
