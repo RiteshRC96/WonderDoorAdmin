@@ -4,6 +4,8 @@ import { Box, Package, Truck, TrendingUp, AlertCircle, PackageSearch, AlertTrian
 import { db, collection, getDocs, Timestamp, query, where, orderBy, limit, getCountFromServer } from '@/lib/firebase/firebase'; // Import Firestore functions
 import Link from 'next/link';
 import type { AddItemInput } from '@/schemas/inventory'; // Import item type
+import type { Order } from '@/schemas/order'; // Import order type
+import type { Shipment } from '@/schemas/shipment'; // Import shipment type
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 import { InventoryCategoryPieChart, type InventoryCategoryData } from '@/components/charts/inventory-category-pie-chart';
 import { OrderStatusBarChart, type OrderStatusData } from '@/components/charts/order-status-bar-chart';
@@ -18,21 +20,17 @@ interface InventoryItemSummary {
   material: string;
 }
 
-// Placeholder data structure for Order Status
-interface OrderSummary {
-  id: string;
-  customerName: string;
-  total: number;
-  status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Pending Payment';
-}
-
-// Function to fetch dashboard data
+// Function to fetch dashboard data dynamically
 async function getDashboardData() {
   let totalItems = 0;
   let lowStockItems: InventoryItemSummary[] = [];
+  let openOrdersCount = 0;
+  let inTransitShipmentsCount = 0;
+  let inventoryByCategory: InventoryCategoryData[] = [];
+  let ordersByStatus: OrderStatusData[] = [];
   let error: string | null = null;
-  let inventoryByCategory: InventoryCategoryData[] = []; // Placeholder for pie chart
-  let ordersByStatus: OrderStatusData[] = []; // Placeholder for bar chart
+  const monthlySalesTrend = "+0.0%"; // Placeholder - Complex to calculate accurately without historical aggregation
+  let recentOrders: Order[] = []; // Placeholder - Can be implemented later if needed
 
   if (!db) {
     const errorMessage = "Database initialization failed. Cannot fetch dashboard data.";
@@ -40,30 +38,29 @@ async function getDashboardData() {
     return {
       totalItems,
       lowStockItems,
+      openOrdersCount,
+      inTransitShipmentsCount,
+      monthlySalesTrend,
+      recentOrders,
+      inventoryByCategory,
+      ordersByStatus,
       error: errorMessage,
-      inventoryByCategory, // Return placeholders
-      ordersByStatus, // Return placeholders
-      // Existing placeholders
-      openOrdersCount: 0,
-      inTransitShipmentsCount: 0,
-      monthlySalesTrend: "+0.0%",
-      recentOrders: []
     };
   }
 
   try {
+    // --- Inventory Data ---
     const inventoryCollectionRef = collection(db, 'inventory');
-
     // 1. Get total item count
     const countSnapshot = await getCountFromServer(inventoryCollectionRef);
     totalItems = countSnapshot.data().count;
 
-    // 2. Get low stock items (e.g., stock < 10)
+    // 2. Get low stock items (stock < 10)
     const lowStockQuery = query(
       inventoryCollectionRef,
       where('stock', '<', 10),
-      orderBy('stock', 'asc'), // Show lowest stock first
-      limit(5) // Limit to 5 items
+      orderBy('stock', 'asc'),
+      limit(5)
     );
     const lowStockSnapshot = await getDocs(lowStockQuery);
     lowStockSnapshot.forEach((doc) => {
@@ -78,50 +75,96 @@ async function getDashboardData() {
       });
     });
 
-    // --- Generate Placeholder Data for Charts ---
-    // In a real app, fetch and aggregate this data from Firestore
+    // 3. Aggregate inventory by category (style) for Pie Chart
+    const allInventorySnapshot = await getDocs(inventoryCollectionRef);
+    const categoryCounts: { [key: string]: number } = {};
+    allInventorySnapshot.forEach(doc => {
+        const item = doc.data() as AddItemInput;
+        const category = item.style || 'Uncategorized';
+        categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+    });
+    // Map to chart data format, limiting categories for clarity
+    const sortedCategories = Object.entries(categoryCounts)
+        .sort(([, a], [, b]) => b - a); // Sort descending by count
+    const topCategories = sortedCategories.slice(0, 4);
+    const otherCount = sortedCategories.slice(4).reduce((sum, [, count]) => sum + count, 0);
 
-    // Placeholder Inventory Category Data
-    inventoryByCategory = [
-      { category: 'Modern', count: 45, fill: "var(--color-modern)" },
-      { category: 'Classic', count: 25, fill: "var(--color-classic)" },
-      { category: 'Industrial', count: 15, fill: "var(--color-industrial)" },
-      { category: 'Bohemian', count: 10, fill: "var(--color-bohemian)" },
-      { category: 'Other', count: 5, fill: "var(--color-other)" },
-    ];
+    inventoryByCategory = topCategories.map(([category, count], index) => ({
+        category,
+        count,
+        fill: `var(--color-${inventoryChartConfig[category.toLowerCase() as keyof typeof inventoryChartConfig]?.label?.toLowerCase() || `chart-${index + 1}`})` // Map to config or default chart colors
+    }));
+     if (otherCount > 0) {
+        inventoryByCategory.push({ category: 'Other', count: otherCount, fill: 'var(--color-other)' });
+     }
 
-     // Placeholder Order Status Data
-     ordersByStatus = [
-        { status: 'Processing', count: 12, fill: "var(--color-processing)" },
-        { status: 'Shipped', count: 25, fill: "var(--color-shipped)" },
-        { status: 'Delivered', count: 58, fill: "var(--color-delivered)" },
-        { status: 'Pending', count: 5, fill: "var(--color-pending)" },
-        { status: 'Cancelled', count: 3, fill: "var(--color-cancelled)" },
-     ];
+
+    // --- Order Data ---
+    const ordersCollectionRef = collection(db, 'orders');
+    // 1. Get open orders count ('Processing' or 'Pending Payment')
+    const openOrderQuery = query(ordersCollectionRef, where('status', 'in', ['Processing', 'Pending Payment']));
+    const openOrderSnapshot = await getCountFromServer(openOrderQuery);
+    openOrdersCount = openOrderSnapshot.data().count;
+
+    // 2. Aggregate orders by status for Bar Chart
+    const allOrdersSnapshot = await getDocs(ordersCollectionRef);
+    const statusCounts: { [key: string]: number } = {};
+     allOrdersSnapshot.forEach(doc => {
+         const order = doc.data() as Order;
+         const status = order.status;
+         statusCounts[status] = (statusCounts[status] || 0) + 1;
+     });
+
+    ordersByStatus = Object.entries(statusCounts).map(([status, count]) => ({
+        status,
+        count,
+        fill: `var(--color-${orderStatusChartConfig[status.toLowerCase() as keyof typeof orderStatusChartConfig]?.label?.toLowerCase() || 'other'})` // Map to config or fallback
+    }));
+    // Ensure all defined statuses in config are present, even if count is 0
+    Object.keys(orderStatusChartConfig).forEach(key => {
+        if (key !== 'count' && !ordersByStatus.some(s => s.status.toLowerCase() === key.toLowerCase())) {
+            const configEntry = orderStatusChartConfig[key as keyof typeof orderStatusChartConfig];
+            if(configEntry.label){
+                ordersByStatus.push({ status: configEntry.label as string, count: 0, fill: `var(--color-${key})` });
+            }
+        }
+    });
+
+
+    // --- Shipment Data ---
+    const shipmentsCollectionRef = collection(db, 'shipments');
+    // 1. Get in-transit shipments count ('In Transit', 'Out for Delivery')
+    const inTransitQuery = query(shipmentsCollectionRef, where('status', 'in', ['In Transit', 'Out for Delivery']));
+    const inTransitSnapshot = await getCountFromServer(inTransitQuery);
+    inTransitShipmentsCount = inTransitSnapshot.data().count;
 
 
   } catch (fetchError) {
-    const errorMessage = `Error fetching dashboard data: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`;
-    console.error(errorMessage);
-    error = "Failed to load some dashboard data due to a database error.";
-     if (fetchError instanceof Error && fetchError.message.toLowerCase().includes("index")) { // More robust check for index errors
-         error = "Firestore query failed: A required index is missing. Please create the necessary index in the Firebase console (Firestore Database > Indexes).";
-         console.warn(error);
-     }
+    let specificErrorMessage = "Failed to load some dashboard data due to a database error.";
+    if (fetchError instanceof Error) {
+        specificErrorMessage = `Error fetching dashboard data: ${fetchError.message}`;
+        if (fetchError.message.toLowerCase().includes("index")) {
+            specificErrorMessage += " A required Firestore index might be missing. Please check the Firebase console (Firestore Database > Indexes).";
+        } else if (fetchError.message.toLowerCase().includes("permission")) {
+            specificErrorMessage += " Check Firestore security rules.";
+        }
+    }
+    console.error(specificErrorMessage);
+    error = specificErrorMessage;
   }
 
-  // Keep other placeholders for now
-  const openOrdersCount = ordersByStatus.find(s => s.status === 'Processing')?.count ?? 0; // Example: Use chart data
-  const inTransitShipmentsCount = 12; // Placeholder
-  const monthlySalesTrend = "+8.5%"; // Placeholder
-  const recentOrders = [ // Placeholder
-      { id: 'ORD-006', customer: 'Jane Doe', total: 850.00, status: 'Processing' },
-      { id: 'ORD-005', customer: 'Ethan Hunt', total: 0, status: 'Cancelled' },
-      { id: 'ORD-004', customer: 'Diana Prince', total: 620.00, status: 'Delivered' },
-  ];
 
-
-  return { totalItems, lowStockItems, openOrdersCount, inTransitShipmentsCount, monthlySalesTrend, recentOrders, error, inventoryByCategory, ordersByStatus };
+  return {
+      totalItems,
+      lowStockItems,
+      openOrdersCount,
+      inTransitShipmentsCount,
+      monthlySalesTrend, // Still placeholder
+      recentOrders, // Still placeholder
+      inventoryByCategory,
+      ordersByStatus,
+      error
+    };
 }
 
 
@@ -129,13 +172,13 @@ export default async function DashboardPage() {
   const {
       totalItems,
       lowStockItems,
-      openOrdersCount, // Using placeholder/derived
-      inTransitShipmentsCount, // Using placeholder
-      monthlySalesTrend, // Using placeholder
-      recentOrders, // Using placeholder
+      openOrdersCount,
+      inTransitShipmentsCount,
+      monthlySalesTrend,
+      recentOrders, // Placeholder usage
       error: fetchError,
-      inventoryByCategory, // Placeholder chart data
-      ordersByStatus, // Placeholder chart data
+      inventoryByCategory,
+      ordersByStatus,
     } = await getDashboardData();
 
   return (
@@ -156,14 +199,19 @@ export default async function DashboardPage() {
                )}
                {fetchError.includes("index") && (
                  <span className="block mt-2 text-xs">
-                   A Firestore index might be required for filtering/sorting low stock items. Check the console logs for details and create the index in Firebase.
+                   A Firestore index might be required. Check the error details and create the index in Firebase.
+                 </span>
+               )}
+               {fetchError.includes("permission") && (
+                 <span className="block mt-2 text-xs">
+                   Check your Firestore security rules in the Firebase console.
                  </span>
                )}
              </AlertDescription>
            </Alert>
        )}
 
-      {/* Stats Grid - Now includes dynamic Total Inventory */}
+      {/* Stats Grid - Now includes dynamic counts */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow hover:shadow-md transition-shadow duration-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -211,7 +259,7 @@ export default async function DashboardPage() {
            <CardContent>
              <div className="text-3xl font-bold text-green-600">{monthlySalesTrend}</div>
              <p className="text-xs text-muted-foreground pt-1">
-               Compared to last month
+               Compared to last month (Placeholder)
              </p>
            </CardContent>
          </Card>
@@ -228,7 +276,11 @@ export default async function DashboardPage() {
                     <CardDescription>Distribution of items across different styles.</CardDescription>
                 </CardHeader>
                 <CardContent className="pl-2">
-                    <InventoryCategoryPieChart data={inventoryByCategory} config={inventoryChartConfig} />
+                    {inventoryByCategory.length > 0 ? (
+                         <InventoryCategoryPieChart data={inventoryByCategory} config={inventoryChartConfig} />
+                    ) : (
+                         <p className="text-muted-foreground text-center py-10 italic">No inventory data for chart.</p>
+                    )}
                 </CardContent>
              </Card>
 
@@ -241,7 +293,11 @@ export default async function DashboardPage() {
                     <CardDescription>Current count of orders by status.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                     <OrderStatusBarChart data={ordersByStatus} config={orderStatusChartConfig} />
+                     {ordersByStatus.length > 0 ? (
+                        <OrderStatusBarChart data={ordersByStatus} config={orderStatusChartConfig} />
+                    ) : (
+                         <p className="text-muted-foreground text-center py-10 italic">No order data for chart.</p>
+                    )}
                 </CardContent>
             </Card>
         </div>
@@ -288,11 +344,12 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent>
              <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
-              {recentOrders.map(order => (
+              {/* Replace placeholder with actual recent orders fetched from DB if needed */}
+              {recentOrders.length > 0 ? recentOrders.map(order => (
                  <div key={order.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
                     <div>
-                      <p className="font-medium">{order.id}</p>
-                      <p className="text-xs text-muted-foreground">Customer: {order.customer}</p>
+                      <Link href={`/orders/${order.id}`} className="font-medium hover:underline">{order.id.substring(0, 8)}...</Link>
+                      <p className="text-xs text-muted-foreground">Customer: {order.customer.name}</p>
                     </div>
                     {order.status === 'Cancelled' ? (
                          <p className="text-sm font-semibold text-destructive">({order.status})</p>
@@ -300,8 +357,7 @@ export default async function DashboardPage() {
                          <p className="text-sm font-semibold">${order.total.toFixed(2)}</p>
                     )}
                   </div>
-              ))}
-               {recentOrders.length === 0 && (
+              )) : (
                  <p className="text-muted-foreground text-center pt-4 italic">No recent orders found.</p>
                 )}
             </div>
