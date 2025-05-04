@@ -7,9 +7,9 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button"; // Import Button component
 import { useToast } from "@/hooks/use-toast";
-import { updateOrderStatusAction } from "@/app/orders/actions"; // Import the server action
+import { updateOrderStatusAction, cancelOrderAction } from "@/app/orders/actions"; // Import the server actions
 import type { Order } from "@/schemas/order";
-import { Loader2, Truck, PackageCheck, RotateCcw } from "lucide-react"; // Added icons
+import { Loader2, Truck, PackageCheck, RotateCcw, XCircle } from "lucide-react"; // Added XCircle icon
 
 interface OrderStatusUpdaterProps {
   orderId: string;
@@ -19,6 +19,7 @@ interface OrderStatusUpdaterProps {
 export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdaterProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = React.useState(false);
+  const [isCancelling, setIsCancelling] = React.useState(false); // State for cancellation
   const [localStatus, setLocalStatus] = React.useState<Order['status']>(currentStatus);
 
   // Keep local state in sync if the prop changes (e.g., after successful update)
@@ -28,7 +29,7 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
 
   const handleStatusChange = async (newStatus: Order['status']) => {
     // Prevent updates if already updating or status is unchanged, or if cancelled
-    if (isUpdating || newStatus === localStatus || localStatus === 'Cancelled') {
+    if (isUpdating || isCancelling || newStatus === localStatus || localStatus === 'Cancelled') {
       return;
     }
 
@@ -48,7 +49,6 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
           description: result.message || "Could not update order status.",
         });
         // Optionally revert the switch visually on failure
-        // Note: This might cause a flicker if the server action is slow
       }
     } catch (error) {
       console.error("Error updating status:", error);
@@ -61,6 +61,39 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
       setIsUpdating(false);
     }
   };
+
+    const handleCancelOrder = async () => {
+        if (isUpdating || isCancelling || localStatus === 'Cancelled') {
+            return;
+        }
+
+        setIsCancelling(true);
+        try {
+            const result = await cancelOrderAction(orderId); // Use the specific cancel action
+            if (result.success) {
+                toast({
+                    title: "Order Cancelled",
+                    description: result.message, // Includes restocking info
+                });
+                setLocalStatus('Cancelled'); // Update local state
+            } else {
+                toast({
+                    variant: "destructive",
+                    title: "Cancellation Failed",
+                    description: result.message || "Could not cancel the order.",
+                });
+            }
+        } catch (error) {
+            console.error("Error cancelling order:", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "An unexpected error occurred during cancellation.",
+            });
+        } finally {
+            setIsCancelling(false);
+        }
+    };
 
   // Determine switch states based on localStatus
   const isProcessing = localStatus === 'Processing';
@@ -78,7 +111,7 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
         {/* Prevent interactions if cancelled */}
         {isCancelled ? (
              <div className="flex items-center space-x-3 p-4 bg-destructive/10 rounded-md border border-destructive/50">
-                <RotateCcw className="h-5 w-5 text-destructive" />
+                <XCircle className="h-5 w-5 text-destructive" />
                 <Label className="text-destructive font-medium">Order Cancelled</Label>
              </div>
         ) : (
@@ -100,7 +133,7 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
                         if (checked) handleStatusChange('Processing');
                         // Cannot uncheck 'Processing' directly, must move to 'Shipped'
                     }}
-                    disabled={isUpdating || isShipped || isDelivered} // Disable if shipped or delivered
+                    disabled={isUpdating || isShipped || isDelivered || isCancelling} // Disable if shipped, delivered or cancelling
                     aria-label="Set status to Processing"
                     />
                 </div>
@@ -123,7 +156,7 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
                         if (checked) handleStatusChange('Shipped');
                         else handleStatusChange('Processing'); // Revert to Processing if unchecked
                     }}
-                    disabled={isUpdating || isDelivered} // Disable if delivered
+                    disabled={isUpdating || isDelivered || isCancelling} // Disable if delivered or cancelling
                     aria-label="Set status to Shipped"
                     />
                  </div>
@@ -146,7 +179,7 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
                         if (checked) handleStatusChange('Delivered');
                         else handleStatusChange('Shipped'); // Revert to Shipped if unchecked
                     }}
-                    disabled={isUpdating}
+                    disabled={isUpdating || isCancelling} // Disable if cancelling
                     aria-label="Set status to Delivered"
                     />
                  </div>
@@ -160,11 +193,11 @@ export function OrderStatusUpdater({ orderId, currentStatus }: OrderStatusUpdate
                 variant="destructive"
                 size="sm"
                 className="w-full mt-4"
-                onClick={() => handleStatusChange('Cancelled')}
-                disabled={isUpdating}
+                onClick={handleCancelOrder} // Use the dedicated cancel handler
+                disabled={isUpdating || isCancelling || isShipped || isDelivered} // Disable if updating, cancelling, shipped, or delivered
                 >
-                 {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4"/>}
-                Cancel Order
+                 {isCancelling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4"/>}
+                 {isCancelling ? 'Cancelling Order...' : 'Cancel Order'}
              </Button>
           )}
 

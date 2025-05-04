@@ -147,12 +147,16 @@ export async function updateOrderAction(
     };
   }
 
-  // *** Initial Implementation: Does NOT adjust inventory on edit ***
-  // A full implementation would:
-  // 1. Get the original order items.
-  // 2. Calculate stock difference between original and new items.
-  // 3. Use a transaction to update order AND adjust inventory stock atomically.
-  // This adds significant complexity.
+  // *** Important Note: Inventory Stock Adjustment on Edit ***
+  // This basic update does NOT adjust inventory stock based on changes to the items array.
+  // A robust implementation would require:
+  // 1. Fetching the *original* order items before the update.
+  // 2. Comparing the original items/quantities with the *new* items/quantities.
+  // 3. Calculating the *difference* in stock required for each item.
+  // 4. Using a Firestore Transaction (writeBatch) to:
+  //    a. Update the order document.
+  //    b. Adjust the stock levels for each affected inventory item atomically.
+  // This adds significant complexity and is omitted here for brevity. Assume manual stock adjustment is needed for edits currently.
 
   const orderDataToUpdate = {
     ...validationResult.data,
@@ -241,13 +245,85 @@ export async function updateOrderStatusAction(orderId: string, newStatus: Order[
    }
 }
 
-// --- Cancel Order Action (Example of specific status update) ---
+// --- Cancel Order Action (Includes Inventory Restock) ---
 export async function cancelOrderAction(orderId: string): Promise<{ success: boolean; message: string }> {
-   // Optional: Add logic here to check if the order *can* be cancelled (e.g., not already shipped/delivered)
-   // Fetch the order first, check its status, then proceed or return an error.
-   // ** Note: This does NOT automatically restock inventory. That requires separate logic. **
-   return updateOrderStatusAction(orderId, 'Cancelled', 'Refunded'); // Also update payment status to Refunded
+    if (!db) {
+        const errorMessage = "Database configuration error. Unable to cancel order.";
+        console.error("Firestore database is not initialized. Cannot cancel order.");
+        return { success: false, message: errorMessage };
+    }
+    if (!orderId) {
+        return { success: false, message: "Order ID is required." };
+    }
+
+    const orderDocRef = doc(db, 'orders', orderId);
+    const batch = writeBatch(db);
+    let itemsToRestock: { ref: any; quantity: number; name: string }[] = [];
+
+    try {
+        console.log(`Attempting to cancel order ID: ${orderId} and restock items.`);
+        const orderSnap = await getDoc(orderDocRef);
+
+        if (!orderSnap.exists()) {
+            return { success: false, message: `Order ${orderId} not found.` };
+        }
+
+        const orderData = orderSnap.data() as Order;
+
+        // Prevent cancelling if already shipped or delivered
+        if (['Shipped', 'Delivered'].includes(orderData.status)) {
+            return { success: false, message: `Cannot cancel order that is already ${orderData.status}.` };
+        }
+        if (orderData.status === 'Cancelled') {
+             return { success: true, message: `Order ${orderId} is already cancelled.` }; // Idempotent
+        }
+
+        // Prepare to update order status
+        batch.update(orderDocRef, {
+            status: 'Cancelled',
+            paymentStatus: 'Refunded', // Assuming cancellation implies refund
+            updatedAt: serverTimestamp(),
+        });
+
+        // Prepare to restock inventory items
+        for (const item of orderData.items) {
+            const inventoryItemRef = doc(db, 'inventory', item.itemId);
+            const inventoryItemSnap = await getDoc(inventoryItemRef);
+
+            if (!inventoryItemSnap.exists()) {
+                console.warn(`Inventory item ${item.name} (ID: ${item.itemId}) not found during cancellation restock. Skipping restock for this item.`);
+                continue; // Skip if item doesn't exist, but continue cancellation
+            }
+
+            const currentStock = inventoryItemSnap.data()?.stock ?? 0;
+            const newStock = currentStock + item.quantity;
+            batch.update(inventoryItemRef, { stock: newStock, updatedAt: serverTimestamp() });
+            itemsToRestock.push({ ref: inventoryItemRef, quantity: item.quantity, name: item.name }); // Keep track for logging/revalidation
+        }
+
+        // Commit the batch
+        await batch.commit();
+        console.log(`Successfully cancelled order ${orderId} and updated stock for ${itemsToRestock.length} item types.`);
+
+        // Revalidate paths
+        revalidatePath('/orders');
+        revalidatePath(`/orders/${orderId}`);
+        revalidatePath('/inventory');
+        itemsToRestock.forEach(item => revalidatePath(`/inventory/${item.ref.id}`));
+        revalidatePath('/'); // Revalidate dashboard
+
+        return { success: true, message: "Order cancelled and inventory restocked successfully." };
+
+    } catch (error) {
+        const errorMessage = `Error cancelling order (ID: ${orderId}): ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMessage);
+        return {
+            success: false,
+            message: "Failed to cancel order due to a database error. Inventory may not have been restocked.",
+        };
+    }
 }
+
 
 // Potentially add an action to link a shipment ID to an order
 export async function linkShipmentToOrderAction(orderId: string, shipmentId: string): Promise<{ success: boolean; message: string }> {
