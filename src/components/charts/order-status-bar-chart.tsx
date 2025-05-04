@@ -34,7 +34,7 @@ export function OrderStatusBarChart({ data, config }: OrderStatusBarChartProps) 
              top: 20,
              right: 20,
              left: 0, // Adjusted left margin
-             bottom: 5,
+             bottom: 20, // Increased bottom margin for rotated labels
           }}
         >
           <CartesianGrid vertical={false} />
@@ -45,6 +45,7 @@ export function OrderStatusBarChart({ data, config }: OrderStatusBarChartProps) 
               axisLine={false}
               tickMargin={8}
               tickFormatter={(value) => value.toLocaleString()} // Format number
+              allowDecimals={false} // Ensure integer ticks
            />
            {/* XAxis with status labels */}
            <XAxis
@@ -53,9 +54,11 @@ export function OrderStatusBarChart({ data, config }: OrderStatusBarChartProps) 
             axisLine={false}
             tickMargin={8}
             interval={0} // Show all labels
-            // Consider rotating labels if they overlap:
-            // angle={-30}
-            // dy={10}
+            // Rotate labels to prevent overlap
+            angle={-30}
+            textAnchor="end" // Anchor rotated text at the end
+            height={50} // Allocate more height for rotated labels
+            dy={10} // Adjust vertical position of rotated labels
           />
           <ChartTooltip
              cursor={false} // Disable cursor line on hover
@@ -74,3 +77,4 @@ export function OrderStatusBarChart({ data, config }: OrderStatusBarChartProps) 
      </ChartContainer>
   )
 }
+
