@@ -1,10 +1,10 @@
-
 "use client";
 
 import * as React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
+import Image from 'next/image'; // Import Image for preview
 
 import { Button } from "@/components/ui/button";
 import {
@@ -22,20 +22,22 @@ import { Card, CardContent, CardHeader, CardDescription, CardFooter } from "@/co
 import { useToast } from "@/hooks/use-toast";
 import { addItemAction } from "@/app/inventory/actions";
 import { AddItemSchema, type AddItemInput } from "@/schemas/inventory"; // Use AddItemInput directly
-import { Loader2 } from "lucide-react"; // Removed Upload, AlertCircle
+import { Loader2, Upload, AlertCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
-// Removed image validation constants
+// Constants for image validation
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/jpg"];
 
 export function AddItemForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-  // Removed file-related state
-  // const [selectedFileName, setSelectedFileName] = React.useState<string | null>(null);
-  // const [imageDataUrl, setImageDataUrl] = React.useState<string | null>(null);
-  // const [fileError, setFileError] = React.useState<string | null>(null);
-  // const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [selectedFileName, setSelectedFileName] = React.useState<string | null>(null);
+  const [imageDataUrl, setImageDataUrl] = React.useState<string | null>(null); // State to hold the image data URL
+  const [fileError, setFileError] = React.useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null); // Ref for file input
 
   const form = useForm<AddItemInput>({
     resolver: zodResolver(AddItemSchema),
@@ -51,16 +53,99 @@ export function AddItemForm() {
       leadTime: "",
       description: "",
       imageUrl: "", // Initialize imageUrl as empty string
-      // imageHint is removed
+      // imageHint: "", // Initialize imageHint
     },
     mode: "onBlur",
   });
 
-  // Removed file handling logic (readFileAsDataURL, handleFileChange)
+  // Function to read file as Data URL
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle file selection
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFileError(null); // Reset error on new file selection
+    setImageDataUrl(null); // Reset image data URL
+    setSelectedFileName(null); // Reset file name
+
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    // Validate file type
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setFileError(`Invalid file type. Please select a PNG, JPG, or JPEG image.`);
+      if (fileInputRef.current) fileInputRef.current.value = ''; // Clear the file input
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setFileError(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
+      if (fileInputRef.current) fileInputRef.current.value = ''; // Clear the file input
+      return;
+    }
+
+    setSelectedFileName(file.name);
+    try {
+        const dataUrl = await readFileAsDataURL(file);
+        setImageDataUrl(dataUrl); // Store the Data URL in state
+        setFileError(null); // Clear any previous errors
+        form.setValue('imageUrl', ''); // Clear the imageUrl field if a file is uploaded
+    } catch (error) {
+        console.error("Error reading file:", error);
+        setFileError("Error processing file. Please try again.");
+        if (fileInputRef.current) fileInputRef.current.value = ''; // Clear the file input
+        setImageDataUrl(null);
+        setSelectedFileName(null);
+    }
+  };
+
+   // Handle URL input change - clear file input if URL is typed
+    const handleUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      form.setValue('imageUrl', event.target.value); // Update form state
+      if (event.target.value && fileInputRef.current) {
+        fileInputRef.current.value = ''; // Clear file input
+        setImageDataUrl(null);
+        setSelectedFileName(null);
+        setFileError(null);
+      }
+    };
 
   async function onSubmit(values: AddItemInput) {
     console.log("Form onSubmit triggered. Values:", values);
-    // Removed fileError check
+    if (fileError) {
+        toast({
+            variant: "destructive",
+            title: "Image Error",
+            description: fileError,
+        });
+        return; // Prevent submission if there's a file error
+    }
+
+    // Ensure either a valid URL is provided or a file was uploaded (imageDataUrl is set)
+     if (!values.imageUrl && !imageDataUrl) {
+        // Optionally make image required or handle cases where neither is provided
+        // console.log("No image URL or file provided. Proceeding without image.");
+        // If image is mandatory, set an error:
+        // form.setError("imageUrl", { type: "manual", message: "Please provide an image URL or upload a file." });
+        // return;
+    } else if (values.imageUrl && imageDataUrl) {
+        // This case shouldn't happen due to clearing logic, but handle defensively
+         toast({
+            variant: "destructive",
+            title: "Image Conflict",
+            description: "Please provide either an image URL or upload a file, not both.",
+         });
+         return;
+    }
 
     // Trigger validation manually
     const isValid = await form.trigger();
@@ -70,6 +155,7 @@ export function AddItemForm() {
             title: "Validation Error",
             description: "Please check the highlighted fields.",
         });
+        // Focus on the first error field
         const firstErrorField = Object.keys(form.formState.errors)[0] as keyof AddItemInput | undefined;
         if (firstErrorField) {
             form.setFocus(firstErrorField);
@@ -82,9 +168,13 @@ export function AddItemForm() {
     setIsSubmitting(true);
     console.log("Submitting form data...");
 
-    // Payload is now just the validated form values
-    const payload: AddItemInput = values;
-    console.log("Payload being sent to action:", payload);
+     // Create payload, including the image Data URL IF it exists
+     const payload: AddItemInput & { imageDataUrl?: string } = {
+         ...values,
+         // Pass the Data URL separately for the action to handle
+         imageDataUrl: imageDataUrl || undefined,
+     };
+    console.log("Payload being sent to action (keys):", Object.keys(payload));
 
 
     try {
@@ -98,10 +188,11 @@ export function AddItemForm() {
           description: result.message,
         });
         router.push('/inventory');
-        router.refresh();
+        router.refresh(); // Ensure the page reloads data
       } else {
+        // Handle validation or other errors from the server action
         if (result.errors) {
-            console.error("Server validation errors:", result.errors);
+            console.error("Server validation errors:", result.errors); // Log the error object
             let firstErrorField: keyof AddItemInput | null = null;
             Object.entries(result.errors).forEach(([field, messages]) => {
                 const fieldName = field as keyof AddItemInput;
@@ -109,7 +200,9 @@ export function AddItemForm() {
                     form.setError(fieldName, { type: 'server', message: messages?.[0] || "Server validation failed" });
                     if (!firstErrorField) firstErrorField = fieldName;
                 } else {
+                    // Handle errors not directly mapped to form fields (e.g., general server error)
                     console.warn(`Received server error for non-form field or unmapped field: ${field}`);
+                    // Display a general error toast for unmapped fields
                      toast({
                         variant: "destructive",
                         title: `Server Error (${field})`,
@@ -118,6 +211,7 @@ export function AddItemForm() {
                 }
             });
 
+            // General toast message for validation errors
              const generalErrorMessage = result.message || "Please check the form fields for errors.";
              toast({
                  variant: "destructive",
@@ -125,11 +219,13 @@ export function AddItemForm() {
                  description: generalErrorMessage,
              });
 
+            // Focus on the first specific field error if available
             if (firstErrorField) {
                 form.setFocus(firstErrorField);
             }
 
         } else {
+             // Handle server errors that don't have specific field details
             console.error("Server error without specific field errors:", result.message);
             toast({
                 variant: "destructive",
@@ -139,6 +235,7 @@ export function AddItemForm() {
         }
       }
     } catch (error) {
+       // Handle unexpected client-side errors during submission
        console.error("Submission error caught in component:", error);
        toast({
          variant: "destructive",
@@ -146,6 +243,7 @@ export function AddItemForm() {
          description: "An unexpected client-side error occurred. Please try again.",
        });
     } finally {
+        // Ensure submission state is reset regardless of outcome
         console.log("Setting isSubmitting to false.");
         setIsSubmitting(false);
     }
@@ -316,26 +414,68 @@ export function AddItemForm() {
                 </div>
             </div>
 
-            {/* Media Section - Simplified */}
-             <div className="space-y-4">
-                <h3 className="text-lg font-semibold border-b pb-2">Media</h3>
-                 <FormField
-                     control={form.control}
-                     name="imageUrl"
-                     render={({ field }) => (
-                       <FormItem>
-                         <FormLabel>Image URL (Optional)</FormLabel>
-                         <FormControl>
-                           {/* Use type="url" for basic browser validation */}
-                           <Input type="url" placeholder="https://your-image-host.com/image.jpg or Google Drive share link" {...field} aria-invalid={!!form.formState.errors.imageUrl} />
-                         </FormControl>
-                          <FormDescription>Enter the full URL of the product image (e.g., from Google Drive - ensure link sharing is enabled).</FormDescription>
-                         <FormMessage />
-                       </FormItem>
-                     )}
-                   />
-                 {/* Removed file input and image hint input */}
-                 {/* Removed image preview based on data URL */}
+             {/* Media Section - Combined File Upload and URL */}
+            <div className="space-y-4">
+               <h3 className="text-lg font-semibold border-b pb-2">Media</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    {/* File Upload */}
+                    <div className="space-y-2">
+                        <FormLabel htmlFor="image-upload">Upload Image (Optional)</FormLabel>
+                        <Input
+                            id="image-upload"
+                            ref={fileInputRef}
+                            type="file"
+                            accept={ALLOWED_IMAGE_TYPES.join(",")} // Set accepted file types
+                            onChange={handleFileChange}
+                            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                            aria-describedby="file-upload-help"
+                            aria-invalid={!!fileError}
+                        />
+                         <FormDescription id="file-upload-help">
+                            Max {MAX_FILE_SIZE_MB}MB. Accepted types: PNG, JPG, JPEG.
+                         </FormDescription>
+                        {selectedFileName && !fileError && (
+                            <p className="text-sm text-muted-foreground">Selected file: {selectedFileName}</p>
+                        )}
+                         {fileError && (
+                            <p className="text-sm font-medium text-destructive flex items-center gap-1">
+                                <AlertCircle className="h-4 w-4"/> {fileError}
+                            </p>
+                        )}
+                    </div>
+
+                     {/* URL Input */}
+                     <FormField
+                         control={form.control}
+                         name="imageUrl"
+                         render={({ field }) => (
+                           <FormItem>
+                             <FormLabel>Or Enter Image URL (Optional)</FormLabel>
+                             <FormControl>
+                               <Input
+                                    type="url"
+                                    placeholder="https://..."
+                                    {...field}
+                                    onChange={handleUrlChange} // Use custom handler
+                                    aria-invalid={!!form.formState.errors.imageUrl}
+                                    disabled={!!imageDataUrl} // Disable if file is uploaded
+                               />
+                             </FormControl>
+                             <FormDescription>Enter the full URL of the product image.</FormDescription>
+                             <FormMessage />
+                           </FormItem>
+                         )}
+                       />
+                </div>
+                 {/* Image Preview */}
+                 {imageDataUrl && (
+                     <div className="mt-4 space-y-2">
+                        <FormLabel>Image Preview</FormLabel>
+                         <div className="relative w-32 h-32 rounded-md border overflow-hidden">
+                           <Image src={imageDataUrl} alt="Image preview" layout="fill" objectFit="cover" />
+                         </div>
+                     </div>
+                 )}
             </div>
 
            </CardContent>
@@ -344,8 +484,7 @@ export function AddItemForm() {
               <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
                 Cancel
               </Button>
-              {/* Removed fileError check from disabled condition */}
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || !!fileError}>
                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isSubmitting ? "Saving Item..." : "Save Item"}
               </Button>
