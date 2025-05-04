@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -20,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { addItemAction } from "@/app/inventory/actions";
-import { AddItemSchema, type AddItemInput } from "@/schemas/inventory";
+import { AddItemSchema, type AddItemInput, type AddItemPayload } from "@/schemas/inventory"; // Import AddItemPayload
 import { Loader2, Upload, AlertCircle } from "lucide-react"; // Added AlertCircle
 import { Separator } from "@/components/ui/separator";
 
@@ -115,7 +116,7 @@ export function AddItemForm() {
     setIsSubmitting(true);
 
     // Create payload, including the image Data URL IF it exists
-    const payload: AddItemInput &amp; { imageDataUrl?: string } = {
+    const payload: AddItemPayload = { // Use AddItemPayload type which includes imageDataUrl
         ...values,
         // Pass the Data URL separately for the action to handle
         imageDataUrl: imageDataUrl || undefined,
@@ -144,7 +145,7 @@ export function AddItemForm() {
             let firstErrorField: keyof AddItemInput | null = null;
             Object.entries(result.errors).forEach(([field, messages]) => {
                 const fieldName = field as keyof AddItemInput;
-                if (fieldName in form.getValues() &amp;&amp; messages &amp;&amp; messages.length > 0) {
+                if (fieldName in form.getValues() && messages && messages.length > 0) {
                     form.setError(fieldName, { type: 'manual', message: messages[0] });
                     if (!firstErrorField) firstErrorField = fieldName;
                 } else {
@@ -380,7 +381,7 @@ export function AddItemForm() {
                             {selectedFileName ? `Selected: ${selectedFileName}` : "Upload a PNG, JPG, or JPEG file."}
                          </FormDescription>
                          {/* Display file validation error */}
-                         {fileError &amp;&amp; (
+                         {fileError && (
                             <p className="text-sm font-medium text-destructive flex items-center gap-1">
                                 <AlertCircle className="h-4 w-4" /> {fileError}
                             </p>
@@ -403,7 +404,7 @@ export function AddItemForm() {
                    />
                 </div>
                  {/* Image Preview */}
-                 {imageDataUrl &amp;&amp; (
+                 {imageDataUrl && (
                      <div className="mt-4">
                          <FormLabel>Image Preview</FormLabel>
                          <div className="mt-2 p-2 border rounded-md inline-block">
@@ -420,7 +421,7 @@ export function AddItemForm() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting || !!fileError}>
-                 {isSubmitting &amp;&amp; <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isSubmitting ? "Saving Item..." : "Save Item"}
               </Button>
             </CardFooter>
@@ -429,3 +430,4 @@ export function AddItemForm() {
     </Card>
   );
 }
+
