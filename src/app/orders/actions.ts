@@ -12,7 +12,16 @@ async function getInventoryItem(itemId: string): Promise<(AddItemInput & { id: s
         const itemDocRef = doc(db, 'inventory', itemId);
         const docSnap = await getDoc(itemDocRef);
         if (docSnap.exists()) {
-            return { id: docSnap.id, ...(docSnap.data() as AddItemInput) };
+            // Ensure data conforms to AddItemInput, especially stock and price types
+            const data = docSnap.data();
+            const validatedData = AddItemSchema.partial().safeParse(data); // Use partial schema for existing data
+            if (validatedData.success) {
+                return { id: docSnap.id, ...(validatedData.data as AddItemInput) };
+            } else {
+                console.warn(`Inventory item ${itemId} data validation failed:`, validatedData.error);
+                // Return potentially incomplete data but log warning
+                return { id: docSnap.id, ...(data as AddItemInput) };
+            }
         }
         return null;
     } catch (error) {
@@ -71,10 +80,12 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
               break;
           }
 
-          const currentStock = inventoryItemSnap.data()?.stock ?? 0;
-          if (currentStock < item.quantity) {
+          const inventoryData = inventoryItemSnap.data();
+          const currentStock = inventoryData?.stock; // Access stock field
+          // Ensure currentStock is a number before comparing
+          if (typeof currentStock !== 'number' || currentStock < item.quantity) {
               stockCheckFailed = true;
-              stockErrorMessage = `Insufficient stock for ${item.name}. Available: ${currentStock}, Ordered: ${item.quantity}.`;
+              stockErrorMessage = `Insufficient stock for ${item.name}. Available: ${currentStock ?? 'N/A'}, Ordered: ${item.quantity}.`;
               break;
           }
 
@@ -83,6 +94,7 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
       }
 
       if (stockCheckFailed) {
+          console.error("Stock check failed:", stockErrorMessage);
           return { success: false, message: stockErrorMessage, errors: { items: stockErrorMessage } };
       }
 
@@ -149,14 +161,9 @@ export async function updateOrderAction(
 
   // *** Important Note: Inventory Stock Adjustment on Edit ***
   // This basic update does NOT adjust inventory stock based on changes to the items array.
-  // A robust implementation would require:
-  // 1. Fetching the *original* order items before the update.
-  // 2. Comparing the original items/quantities with the *new* items/quantities.
-  // 3. Calculating the *difference* in stock required for each item.
-  // 4. Using a Firestore Transaction (writeBatch) to:
-  //    a. Update the order document.
-  //    b. Adjust the stock levels for each affected inventory item atomically.
-  // This adds significant complexity and is omitted here for brevity. Assume manual stock adjustment is needed for edits currently.
+  // A robust implementation would require comparing original vs new items and using a transaction.
+  console.warn(`Updating order ${orderId}. Inventory stock levels are NOT automatically adjusted by this edit action.`);
+
 
   const orderDataToUpdate = {
     ...validationResult.data,
@@ -179,7 +186,7 @@ export async function updateOrderAction(
 
     return {
       success: true,
-      message: `Order '${orderId}' updated successfully!`,
+      message: `Order '${orderId}' updated successfully! Remember to manually adjust stock if items changed.`,
     };
 
   } catch (error) {
@@ -258,7 +265,9 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
 
     const orderDocRef = doc(db, 'orders', orderId);
     const batch = writeBatch(db);
-    let itemsToRestock: { ref: any; quantity: number; name: string }[] = [];
+    let itemsToRestock: { ref: any; quantity: number; name: string; itemId: string }[] = [];
+    let restockSkippedCount = 0;
+    let restockError = false;
 
     try {
         console.log(`Attempting to cancel order ID: ${orderId} and restock items.`);
@@ -288,38 +297,70 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
         // Prepare to restock inventory items
         for (const item of orderData.items) {
             const inventoryItemRef = doc(db, 'inventory', item.itemId);
-            const inventoryItemSnap = await getDoc(inventoryItemRef);
+            try {
+                const inventoryItemSnap = await getDoc(inventoryItemRef);
 
-            if (!inventoryItemSnap.exists()) {
-                console.warn(`Inventory item ${item.name} (ID: ${item.itemId}) not found during cancellation restock. Skipping restock for this item.`);
-                continue; // Skip if item doesn't exist, but continue cancellation
+                if (!inventoryItemSnap.exists()) {
+                    console.warn(`Inventory item ${item.name} (ID: ${item.itemId}) not found during cancellation restock. Skipping restock for this item.`);
+                    restockSkippedCount++;
+                    continue; // Skip if item doesn't exist, but continue cancellation
+                }
+
+                const inventoryData = inventoryItemSnap.data();
+                const currentStock = inventoryData?.stock;
+
+                // Ensure currentStock is a number before adding
+                if (typeof currentStock !== 'number') {
+                    console.error(`Invalid stock value for item ${item.itemId} during restock:`, currentStock, ". Skipping restock for this item.");
+                    restockSkippedCount++;
+                    restockError = true; // Flag that there was an issue
+                    continue;
+                }
+
+                const newStock = currentStock + item.quantity;
+                console.log(`Restocking item ${item.itemId}: Current Stock: ${currentStock}, Quantity to Add: ${item.quantity}, New Stock: ${newStock}`);
+                batch.update(inventoryItemRef, { stock: newStock, updatedAt: serverTimestamp() });
+                itemsToRestock.push({ ref: inventoryItemRef, quantity: item.quantity, name: item.name, itemId: item.itemId }); // Keep track for logging/revalidation
+
+            } catch (itemError) {
+                console.error(`Error processing inventory item ${item.itemId} during restock:`, itemError);
+                restockSkippedCount++;
+                restockError = true; // Flag that there was an issue with this item
+                // Decide whether to halt the entire batch or just skip this item.
+                // For now, we skip the item and continue.
             }
-
-            const currentStock = inventoryItemSnap.data()?.stock ?? 0;
-            const newStock = currentStock + item.quantity;
-            batch.update(inventoryItemRef, { stock: newStock, updatedAt: serverTimestamp() });
-            itemsToRestock.push({ ref: inventoryItemRef, quantity: item.quantity, name: item.name }); // Keep track for logging/revalidation
         }
 
         // Commit the batch
         await batch.commit();
-        console.log(`Successfully cancelled order ${orderId} and updated stock for ${itemsToRestock.length} item types.`);
+        console.log(`Successfully processed cancellation for order ${orderId}.`);
+         if (itemsToRestock.length > 0) {
+            console.log(`Updated stock for ${itemsToRestock.length} item types.`);
+         }
+         if (restockSkippedCount > 0) {
+             console.warn(`Skipped restocking for ${restockSkippedCount} item types due to errors or item not found.`);
+         }
+
 
         // Revalidate paths
         revalidatePath('/orders');
         revalidatePath(`/orders/${orderId}`);
         revalidatePath('/inventory');
-        itemsToRestock.forEach(item => revalidatePath(`/inventory/${item.ref.id}`));
+        itemsToRestock.forEach(item => revalidatePath(`/inventory/${item.itemId}`));
         revalidatePath('/'); // Revalidate dashboard
 
-        return { success: true, message: "Order cancelled and inventory restocked successfully." };
+        let successMessage = "Order cancelled successfully.";
+        if (itemsToRestock.length > 0) successMessage += " Inventory restocked.";
+        if (restockSkippedCount > 0) successMessage += ` Skipped restock for ${restockSkippedCount} item(s). Check logs.`;
+
+        return { success: true, message: successMessage };
 
     } catch (error) {
         const errorMessage = `Error cancelling order (ID: ${orderId}): ${error instanceof Error ? error.message : String(error)}`;
         console.error(errorMessage);
         return {
             success: false,
-            message: "Failed to cancel order due to a database error. Inventory may not have been restocked.",
+            message: "Failed to cancel order due to a database error. Inventory may not have been restocked correctly.",
         };
     }
 }
