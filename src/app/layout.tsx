@@ -1,4 +1,3 @@
-
 "use client"; // Make layout client component to use hooks
 
 import type { Metadata } from 'next'; // Use type import
@@ -108,16 +107,20 @@ export default function RootLayout({
                 </SidebarMenu>
               </SidebarContent>
               <SidebarFooter>
-                 <div className="p-2">
-                   <LogoutButton />
-                 </div>
+                 {/* Logout button moved from here */}
               </SidebarFooter>
             </Sidebar>
             <SidebarInset>
-              {/* Increased padding for better spacing within the main content area */}
-              <main className="flex-1 p-6 md:p-8 lg:p-10">
-                {children}
-              </main>
+                {/* Increased padding, added relative positioning for logout */}
+               <div className="relative min-h-svh">
+                 <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-4 border-b bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                    {/* Logout button now in top-right header */}
+                    <LogoutButton />
+                 </header>
+                 <main className="flex-1 p-6 md:p-8 lg:p-10">
+                    {children}
+                 </main>
+              </div>
               <Toaster /> {/* Add Toaster for notifications */}
             </SidebarInset>
           </SidebarProvider>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -51,8 +50,8 @@ export default function LoginPage() {
           title: "Login Successful",
           description: "Redirecting to dashboard...",
         });
-        // No need to manually redirect here, middleware will handle it on next navigation
-        router.refresh(); // Refresh to trigger middleware check
+        // Refresh the current route. Middleware will detect the cookie and redirect.
+        router.refresh();
       } else {
         toast({
           variant: "destructive",
@@ -91,7 +90,8 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Username</FormLabel>
                     <FormControl>
-                      <Input placeholder="admin@wonderDoors" {...field} />
+                      {/* Removed placeholder */}
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -104,7 +104,8 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="********" {...field} />
+                      {/* Removed placeholder */}
+                      <Input type="password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

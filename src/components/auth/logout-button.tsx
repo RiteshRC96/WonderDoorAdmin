@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -35,15 +34,17 @@ export function LogoutButton() {
        setIsLoggingOut(false); // Reset loading state on error
     }
     // No need to reset loading state on success as page will redirect
+
   };
 
   return (
     <Button
-      variant="ghost"
+      variant="ghost" // Keep ghost variant for subtle look
       size="sm"
       onClick={handleLogout}
       disabled={isLoggingOut}
-      className="w-full justify-start text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+      // Removed w-full and sidebar-specific styles
+      className="text-foreground/80 hover:text-foreground hover:bg-accent"
     >
       {isLoggingOut ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
