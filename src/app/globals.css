@@ -4,12 +4,15 @@
 
 body {
   font-family: var(--font-sans, Arial, Helvetica, sans-serif); /* Use CSS variable */
+  /* Apply a subtle gradient background */
+  background: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background-gradient-end, var(--background))) 100%);
 }
 
 @layer base {
   :root {
-    /* Light Theme - More Colorful */
-    --background: 210 40% 98%; /* Very Light Blue */
+    /* Light Theme - More Colorful with Gradient */
+    --background: 210 40% 98%; /* Very Light Blue - Start */
+    --background-gradient-end: 210 40% 96%; /* Slightly darker Light Blue - End */
     --foreground: 210 15% 25%; /* Dark Blue Gray */
     --card: 0 0% 100%; /* White */
     --card-foreground: 210 15% 25%; /* Dark Blue Gray */
@@ -45,8 +48,9 @@ body {
     --sidebar-ring: 250 70% 70%; /* Lighter Violet */
   }
   .dark {
-    /* Dark Theme - More Colorful */
-    --background: 220 15% 10%; /* Very Dark Blue */
+    /* Dark Theme - More Colorful with Gradient */
+    --background: 220 15% 10%; /* Very Dark Blue - Start */
+    --background-gradient-end: 220 15% 8%; /* Slightly darker Dark Blue - End */
     --foreground: 210 20% 92%; /* Light Gray Blue */
     --card: 220 15% 15%; /* Slightly Lighter Dark Blue */
     --card-foreground: 210 20% 92%; /* Light Gray Blue */
@@ -94,9 +98,9 @@ body {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    /* Add subtle transition for background/color changes */
-    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    @apply text-foreground min-h-screen; /* Ensure min-height */
+    /* Gradient applied directly to body */
+    transition: background 0.3s ease-in-out, color 0.2s ease-in-out;
   }
 
   /* Subtle transitions for buttons and interactive elements */
@@ -105,6 +109,11 @@ body {
   }
   button:hover, a:hover {
     @apply transition-transform duration-150 ease-in-out; /* Add subtle scale or movement on hover */
+  }
+  /* Add subtle gradient to primary button */
+  .btn-primary-gradient {
+     @apply bg-gradient-to-r from-primary to-[color:hsl(var(--primary)/0.8)];
+     /* Adjust colors as needed */
   }
 }
 
@@ -116,4 +125,14 @@ body {
 
 .animate-subtle-fade-in {
   animation: subtle-fade-in 0.5s ease-out forwards; /* Use forwards to keep final state */
+}
+
+/* Add subtle gradient to card headers */
+.card-header-gradient {
+   @apply bg-gradient-to-r from-card to-card/90 p-6; /* Example gradient */
+}
+
+/* Add subtle gradient to sidebar */
+.sidebar-gradient {
+  @apply bg-gradient-to-b from-sidebar to-[color:hsl(var(--sidebar-background)/0.95)];
 }
