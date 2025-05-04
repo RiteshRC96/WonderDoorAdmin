@@ -61,35 +61,47 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
     };
   }
 
+    // Double-check image hint requirement if no image data URL is present
+   if (!imageDataUrl && !validationResult.data.imageHint) {
+       return {
+         success: false,
+         message: "Image hint is required if no image is uploaded.",
+         errors: { imageHint: ["Image hint is required."] }
+       };
+   }
+
+
   let finalImageUrl: string | undefined = undefined;
 
   // --- Handle Image Upload ---
   // Use && instead of &amp;&amp;
-  if (imageDataUrl && storage) {
+  if (imageDataUrl && storage) { // Ensure storage is initialized
       try {
           console.log("Image data URL provided, attempting upload...");
           // Validate Data URL format (basic check)
-          if (!imageDataUrl.startsWith('data:image/')) {
-              throw new Error("Invalid image Data URL format.");
-          }
+          const match = imageDataUrl.match(/^data:(image\/(.+));base64,(.*)$/);
+           if (!match) {
+               throw new Error("Invalid image Data URL format.");
+           }
+
+           const mimeType = match[1]; // e.g., 'image/png'
+           const fileExtension = match[2]; // e.g., 'png'
+           const base64Data = match[3]; // The Base64 encoded data
+
+           if (!base64Data) {
+                throw new Error("Could not extract Base64 data from Data URL.");
+           }
 
           // Generate a unique filename (e.g., using SKU and timestamp)
-          const fileExtension = imageDataUrl.substring(imageDataUrl.indexOf('/') + 1, imageDataUrl.indexOf(';base64'));
           // Use forward slashes for Storage paths
           const fileName = `inventory/${validationResult.data.sku || 'unknown_sku'}_${Date.now()}.${fileExtension}`;
           const imageStorageRef = storageRef(storage, fileName);
 
           console.log(`Uploading image to Storage path: ${fileName}`);
 
-          // Extract Base64 data (remove the 'data:image/...;base64,' part)
-          const base64Data = imageDataUrl.split(',')[1];
-          if (!base64Data) {
-               throw new Error("Could not extract Base64 data from Data URL.");
-          }
-
           // Upload the image data as a Base64 string
           const uploadResult = await uploadString(imageStorageRef, base64Data, 'base64', {
-             contentType: `image/${fileExtension}` // Set content type for proper handling
+             contentType: mimeType // Set content type for proper handling
           });
           console.log("Image uploaded successfully to Storage.");
 
@@ -98,27 +110,44 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
           console.log(`Image download URL obtained: ${finalImageUrl}`);
 
       } catch (uploadError) {
-          const errorMessage = `Image upload failed: ${uploadError instanceof Error ? uploadError.message : String(uploadError)}`;
-          console.error(errorMessage);
+          let userFriendlyMessage = "Image upload failed. Please try again or skip image upload.";
+          if (uploadError instanceof Error) {
+              console.error(`Image upload error details: ${uploadError.message}`, uploadError);
+               if (uploadError.message.includes('storage/unauthorized')) {
+                  userFriendlyMessage = "Image upload failed: Unauthorized. Check Storage security rules.";
+               } else if (uploadError.message.includes('storage/canceled')) {
+                   userFriendlyMessage = "Image upload cancelled.";
+               } else if (uploadError.message.includes('storage/unknown')) {
+                   userFriendlyMessage = "An unknown error occurred during image upload. Check network or configuration.";
+               } else {
+                   userFriendlyMessage = `Image upload failed: ${uploadError.message}`;
+               }
+          } else {
+               console.error("An unexpected error occurred during upload:", uploadError);
+          }
+
           return {
               success: false,
-              message: `Failed to upload image. Please try again or skip image upload. Error: ${errorMessage}`,
-              errors: { imageUrl: ["Image upload failed."] } // Assign error to imageUrl field
+              message: userFriendlyMessage,
+              // Assign error to a general field or a specific one if possible
+              errors: { imageUrl: ["Image upload failed."] } // Generic error for now
           };
       }
-  } else if (!itemData.imageHint && !imageDataUrl) {
-      // If no image uploaded AND no hint provided, return error (as hint is required)
-      return {
-        success: false,
-        message: "Image hint is required if no image is uploaded.",
-        errors: { imageHint: ["Image hint is required."] }
-      };
+  } else if (imageDataUrl && !storage) {
+      // This case should be caught by checkFirebaseInitialization, but handle defensively
+      console.error("Image data provided, but Firebase Storage is not initialized.");
+       return {
+           success: false,
+           message: "Image upload failed because Storage is not configured correctly.",
+           errors: { imageUrl: ["Storage configuration error."] }
+       };
   }
+
 
   // Prepare the final data for Firestore, including the obtained imageUrl
   const newItemData = {
       ...validationResult.data,
-      imageUrl: finalImageUrl, // Use the URL from Storage or undefined
+      imageUrl: finalImageUrl, // Use the URL from Storage or undefined if no upload
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
   };
@@ -130,7 +159,7 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
         if (typedKey !== 'imageUrl' && (newItemData[typedKey] === undefined || newItemData[typedKey] === "")) {
            delete newItemData[typedKey];
         }
-        // Explicitly remove imageUrl if it ended up undefined after potential upload attempt
+        // Explicitly remove imageUrl if it ended up undefined after potential upload attempt or no upload happened
         if(typedKey === 'imageUrl' && newItemData[typedKey] === undefined) {
             delete newItemData[typedKey];
         }
@@ -174,9 +203,9 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
                       errorMessage = "Firestore quota exceeded. Please check your Firebase plan limits.";
                       break;
                   case 'invalid-argument':
-                      // Check if the error is due to large image data being passed directly
+                      // Check if the error is due to large image data being passed directly (should not happen now)
                       if (error.message.includes('longer than 1048487 bytes')) {
-                          errorMessage = "Image data is too large to store directly. Please try a smaller image or check upload logic.";
+                          errorMessage = "Data size limit exceeded for Firestore document. This shouldn't happen with Storage uploads.";
                       } else {
                           errorMessage = `Invalid data provided to Firestore: ${firestoreError.message}`;
                       }
@@ -193,6 +222,19 @@ export async function addItemAction(payload: AddItemPayload): Promise<{ success:
      } else {
         console.error("An unexpected error occurred:", error);
      }
+
+     // Attempt to clean up uploaded image if Firestore add fails
+     if (finalImageUrl && storage) {
+        console.warn(`Firestore save failed for item '${newItemData.name}'. Attempting to delete uploaded image: ${finalImageUrl}`);
+         try {
+             const imageRefToDelete = storageRef(storage, finalImageUrl);
+             await deleteObject(imageRefToDelete);
+             console.log(`Successfully deleted orphaned image for failed item add.`);
+         } catch (deleteError) {
+             console.error(`Failed to delete orphaned image (${finalImageUrl}) after Firestore error:`, deleteError);
+         }
+     }
+
 
     return {
       success: false,
@@ -223,7 +265,7 @@ export async function updateItemAction(
   // A more robust implementation would check if a new image is provided,
   // upload it, delete the old one (if exists), and update the URL.
 
-  const { imageDataUrl, ...itemData } = data; // Separate potential data URL
+  const { imageDataUrl, ...itemData } = data; // Separate potential data URL - NOT USED YET
 
   const validationResult = AddItemSchema.safeParse(itemData);
 
@@ -244,9 +286,9 @@ export async function updateItemAction(
     // imageUrl: validationResult.data.imageUrl || undefined, // Keep existing or newly entered URL for now
     updatedAt: serverTimestamp(),
   };
-   // Ensure imageUrl is either a valid URL string or removed
+   // Ensure imageUrl is either a valid URL string or removed if empty
    if (itemDataToUpdate.imageUrl === "") {
-       delete itemDataToUpdate.imageUrl;
+       itemDataToUpdate.imageUrl = undefined; // Use undefined for potential deletion/no update
    }
 
 
@@ -256,6 +298,12 @@ export async function updateItemAction(
         if (typedKey !== 'imageUrl' && (itemDataToUpdate[typedKey] === undefined || itemDataToUpdate[typedKey] === "")) {
             delete itemDataToUpdate[typedKey];
         }
+         // Handle imageUrl specifically - if it's undefined, don't send it in the update payload
+         // unless you explicitly want to remove the field (requires different handling).
+         // For now, we just won't include it if it's undefined.
+         if (typedKey === 'imageUrl' && itemDataToUpdate[typedKey] === undefined) {
+             delete itemDataToUpdate[typedKey];
+         }
    });
 
 
@@ -302,7 +350,7 @@ export async function updateItemAction(
                      break;
                  case 'invalid-argument':
                       if (error.message.includes('longer than 1048487 bytes')) {
-                          errorMessage = "Image data is too large to store directly. Please check image update logic.";
+                          errorMessage = "Data size limit exceeded for Firestore document.";
                       } else {
                          errorMessage = `Invalid data provided for update: ${firestoreError.message}`;
                       }
@@ -447,6 +495,3 @@ export async function deleteItemAction(itemId: string): Promise<{ success: boole
     };
   }
 }
-
-
-    

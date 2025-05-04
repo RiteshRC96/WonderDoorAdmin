@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -62,7 +61,7 @@ export function AddItemForm() {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
+      reader.onerror = (error) => reject(error); // Pass the error object
       reader.readAsDataURL(file);
     });
   };
@@ -72,37 +71,51 @@ export function AddItemForm() {
     setFileError(null); // Clear previous errors
     setSelectedFileName(null);
     setImageDataUrl(null); // Clear previous data URL
+     // Also clear the imageHint when a new file is selected, unless user specifically typed one
+     const currentHint = form.getValues('imageHint');
+     const wasAutoFilled = selectedFileName && currentHint === selectedFileName.split('.').slice(0, -1).join('.').replace(/[^a-zA-Z0-9\s]/g, ' ').substring(0, 50);
+     if (wasAutoFilled) {
+         form.setValue('imageHint', ''); // Clear auto-filled hint
+     }
+
 
     if (file) {
       // Validate file type
       if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-          setFileError(`Invalid file type. Please select a PNG, JPG, or JPEG image.`);
-          toast({ variant: "destructive", title: "Invalid File Type", description: "Please select a PNG, JPG, or JPEG image." });
+          const errorMsg = `Invalid file type. Please select a PNG, JPG, or JPEG image.`;
+          setFileError(errorMsg);
+          toast({ variant: "destructive", title: "Invalid File Type", description: errorMsg });
           if (fileInputRef.current) fileInputRef.current.value = ""; // Clear the input
           return;
       }
 
       // Validate file size
       if (file.size > MAX_IMAGE_SIZE_BYTES) {
-          setFileError(`File is too large (max ${MAX_IMAGE_SIZE_MB}MB).`);
-          toast({ variant: "destructive", title: "File Too Large", description: `Please select an image smaller than ${MAX_IMAGE_SIZE_MB}MB.` });
+          const errorMsg = `File is too large (max ${MAX_IMAGE_SIZE_MB}MB).`;
+          setFileError(errorMsg);
+          toast({ variant: "destructive", title: "File Too Large", description: errorMsg });
           if (fileInputRef.current) fileInputRef.current.value = ""; // Clear the input
           return;
       }
 
       // If valid, set name and read data URL
       setSelectedFileName(file.name);
-      if (!form.getValues('imageHint')) {
-           form.setValue('imageHint', file.name.split('.').slice(0, -1).join('.').replace(/[^a-zA-Z0-9\s]/g, ' ').substring(0, 50));
-      }
+       // Auto-populate imageHint if it's empty
+       if (!form.getValues('imageHint')) {
+            form.setValue('imageHint', file.name.split('.').slice(0, -1).join('.').replace(/[^a-zA-Z0-9\s]/g, ' ').substring(0, 50));
+            form.trigger('imageHint'); // Trigger validation if needed
+       }
+
       try {
           const dataUrl = await readFileAsDataURL(file);
           setImageDataUrl(dataUrl); // Store data URL in state temporarily
       } catch (error) {
           console.error("Error reading file:", error);
-          setFileError("Could not read the selected image file.");
-          toast({ variant: "destructive", title: "File Read Error", description: "Could not read the selected image file." });
+          const errorMsg = "Could not read the selected image file. It might be corrupted or unreadable.";
+          setFileError(errorMsg);
+          toast({ variant: "destructive", title: "File Read Error", description: errorMsg });
           if (fileInputRef.current) fileInputRef.current.value = ""; // Clear the input
+          setSelectedFileName(null); // Clear selected file name on error
       }
 
     }
@@ -113,6 +126,20 @@ export function AddItemForm() {
          toast({ variant: "destructive", title: "Image Error", description: "Please fix the image selection error before saving." });
          return;
     }
+
+    // Ensure image hint is provided if no image is being uploaded
+    if (!imageDataUrl && !values.imageHint) {
+        form.setError('imageHint', { type: 'manual', message: 'Image hint is required if no image is uploaded.' });
+        toast({ variant: "destructive", title: "Missing Information", description: "Please provide an image hint if you are not uploading an image." });
+        // Focus the hint input
+         setTimeout(() => {
+              const hintInput = document.querySelector<HTMLInputElement>('input[name="imageHint"]');
+              if (hintInput) hintInput.focus();
+         }, 0);
+        return; // Stop submission
+    }
+
+
     setIsSubmitting(true);
 
     // Create payload, including the image Data URL IF it exists
@@ -122,10 +149,10 @@ export function AddItemForm() {
         imageDataUrl: imageDataUrl || undefined,
         imageUrl: undefined, // Ensure imageUrl (for final URL) is not submitted from form
     };
-     // Remove the property if undefined
-     if (!payload.imageDataUrl) {
-         delete payload.imageDataUrl;
-     }
+     // Remove the property if undefined (action checks for existence)
+    //  if (!payload.imageDataUrl) {
+    //      delete payload.imageDataUrl;
+    //  }
 
 
     try {
@@ -171,8 +198,16 @@ export function AddItemForm() {
                     title: "Validation Error",
                     description: result.message || "Please check the form fields.",
                  });
+            } else {
+                // If errors object exists but doesn't map to fields, show general error
+                toast({
+                    variant: "destructive",
+                    title: "Error",
+                    description: result.message || "An unexpected error occurred during save.",
+                });
             }
         } else {
+            // General error message if no specific errors object
             toast({
                 variant: "destructive",
                 title: "Error",
@@ -370,7 +405,7 @@ export function AddItemForm() {
                                 accept={ALLOWED_IMAGE_TYPES.join(',')} // Only allow specific image types
                                 ref={fileInputRef}
                                 onChange={handleFileChange}
-                                className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" // Basic styling
+                                className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer" // Added cursor-pointer
                                 id="image-upload"
                                 aria-describedby="image-file-description"
                                 aria-invalid={!!fileError}
@@ -395,7 +430,7 @@ export function AddItemForm() {
                        <FormItem>
                          <FormLabel>Image Hint *</FormLabel>
                          <FormControl>
-                           <Input placeholder="e.g., modern oak door, minimalist sofa" {...field} aria-invalid={!!form.formState.errors.imageHint} required/>
+                           <Input placeholder="e.g., modern oak door, minimalist sofa" {...field} aria-invalid={!!form.formState.errors.imageHint} required={!imageDataUrl} aria-required={!imageDataUrl}/>
                          </FormControl>
                           <FormDescription>Keywords for AI search if no image uploaded.</FormDescription>
                          <FormMessage />
@@ -407,8 +442,8 @@ export function AddItemForm() {
                  {imageDataUrl && (
                      <div className="mt-4">
                          <FormLabel>Image Preview</FormLabel>
-                         <div className="mt-2 p-2 border rounded-md inline-block">
-                             <img src={imageDataUrl} alt="Preview" className="max-h-40 max-w-full rounded" />
+                         <div className="mt-2 p-2 border rounded-md inline-block max-w-xs">
+                             <img src={imageDataUrl} alt="Preview" className="max-h-40 w-auto rounded" />
                          </div>
                      </div>
                  )}
@@ -430,4 +465,3 @@ export function AddItemForm() {
     </Card>
   );
 }
-
