@@ -11,7 +11,7 @@ import { db, collection, getDocs, Timestamp, query, orderBy } from '@/lib/fireba
 import type { AddItemInput } from '@/schemas/inventory'; // Import the type for structure
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert components
 import { InventoryItemCard } from "@/components/inventory/inventory-item-card"; // Import the client component
-import { Card } from "@/components/ui/card"; // Import Card for filter section
+import { Card, CardContent, CardFooter } from "@/components/ui/card"; // Import Card, CardContent, CardFooter
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton for loading state
 
 // Define the structure of an inventory item including its ID and serializable timestamps
@@ -32,13 +32,16 @@ async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: st
   try {
     console.log("Attempting to fetch inventory items from Firestore...");
     const inventoryCollectionRef = collection(db, 'inventory');
+    // Query ordered by creation date, descending
     const q = query(inventoryCollectionRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
     const items: InventoryItem[] = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data() as AddItemInput & { createdAt?: Timestamp, updatedAt?: Timestamp };
-      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(0).toISOString();
+      // Ensure timestamps are converted to ISO strings for serialization
+      const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(0).toISOString(); // Fallback if no timestamp
       const updatedAt = data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : undefined;
+      // Exclude the original Timestamp objects before spreading the rest of the data
       const { createdAt: originalTimestamp, updatedAt: originalUpdatedAt, ...restData } = data;
       items.push({ id: doc.id, ...restData, createdAt, updatedAt });
     });
@@ -46,11 +49,13 @@ async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: st
     return { items };
   } catch (error) {
      let errorMessage = `Error fetching inventory items from Firestore: ${error instanceof Error ? error.message : String(error)}`;
+      // Provide a more specific error message if it's likely an index issue
       if (error instanceof Error && error.message.toLowerCase().includes("index")) {
          errorMessage = "Firestore query failed: A required index is missing. Please create the index in the Firebase console (Firestore Database > Indexes) for the 'inventory' collection, ordered by 'createdAt' descending.";
-         console.warn(errorMessage);
+         console.warn(errorMessage); // Log as warning as it's a configuration issue
        }
-    console.error(errorMessage);
+    console.error(errorMessage); // Log the full error for debugging
+    // Return a user-friendly error message
     return { items: [], error: errorMessage };
   }
 }
@@ -67,7 +72,7 @@ export default function InventoryPage() {
   React.useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      setFetchError(null);
+      setFetchError(null); // Clear previous errors
       const { items, error } = await getInventoryItems();
       if (error) {
         setFetchError(error);
@@ -86,9 +91,10 @@ export default function InventoryPage() {
   // Filter items based on search and select filters
   const filteredItems = React.useMemo(() => {
     return inventoryItems.filter(item => {
+      const searchLower = searchQuery.toLowerCase();
       const matchesSearch = searchQuery === "" ||
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.sku.toLowerCase().includes(searchQuery.toLowerCase());
+        (item.name && item.name.toLowerCase().includes(searchLower)) ||
+        (item.sku && item.sku.toLowerCase().includes(searchLower));
       const matchesStyle = selectedStyle === "all" || item.style === selectedStyle;
       const matchesMaterial = selectedMaterial === "all" || item.material === selectedMaterial;
       return matchesSearch && matchesStyle && matchesMaterial;
@@ -113,6 +119,7 @@ export default function InventoryPage() {
             <AlertTitle>Error Loading Inventory</AlertTitle>
             <AlertDescription>
               {fetchError}
+              {/* Specific guidance for common errors */}
               {fetchError.includes("initialization failed") && (
                 <span className="block mt-2 text-xs">
                   Please verify your Firebase setup in `.env.local` and restart the application.
@@ -144,7 +151,7 @@ export default function InventoryPage() {
               <Select
                 value={selectedStyle}
                 onValueChange={setSelectedStyle}
-                disabled={isLoading}
+                disabled={isLoading || uniqueStyles.length === 0} // Disable if no styles
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
@@ -160,7 +167,7 @@ export default function InventoryPage() {
               <Select
                 value={selectedMaterial}
                 onValueChange={setSelectedMaterial}
-                disabled={isLoading}
+                disabled={isLoading || uniqueMaterials.length === 0} // Disable if no materials
               >
                 <SelectTrigger className="w-full sm:w-[180px]">
                    <Filter className="mr-2 h-4 w-4 text-muted-foreground inline" />
@@ -203,6 +210,8 @@ export default function InventoryPage() {
       ) : !fetchError && filteredItems.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredItems.map((item) => (
+             // Use the client component for each card
+             // Pass the item with the serialized date
              <InventoryItemCard key={item.id} item={item} />
           ))}
         </div>
@@ -231,3 +240,4 @@ export default function InventoryPage() {
 
 // Dynamic rendering is inherent with client-side fetching/filtering
 // export const dynamic = 'force-dynamic';
+
