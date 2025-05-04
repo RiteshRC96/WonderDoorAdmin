@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -23,10 +24,11 @@ import type { AddItemInput } from '@/schemas/inventory'; // Import the type for 
 import { Badge } from "@/components/ui/badge"; // Import Badge
 import { cn } from "@/lib/utils"; // Import cn utility
 
-// Expect createdAt as a string (ISO format) from the Server Component
+// Expect timestamps as strings (ISO format) from the Server Component
 interface InventoryItem extends Omit<AddItemInput, 'createdAt'> { // Omit potential createdAt from schema if it exists
   id: string;
   createdAt?: string; // Expecting ISO string
+  updatedAt?: string; // Expecting ISO string or undefined
 }
 
 interface InventoryItemCardProps {
@@ -80,7 +82,7 @@ export function InventoryItemCard({ item }: InventoryItemCardProps) {
               layout="fill"
               objectFit="cover"
               data-ai-hint={item.imageHint || 'product item'}
-              className="transition-transform duration-300 ease-in-out group-hover:scale-105"
+              className="transition-transform duration-300 ease-in-out group-hover:scale-105 bg-white" // Added bg-white for placeholder
             />
             {/* Overlay for View Details button */}
              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">

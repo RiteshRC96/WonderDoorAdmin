@@ -10,10 +10,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // 
 import { InventoryItemCard } from "@/components/inventory/inventory-item-card"; // Import the client component
 import { Card } from "@/components/ui/card"; // Import Card for filter section
 
-// Define the structure of an inventory item including its ID and serializable createdAt
+// Define the structure of an inventory item including its ID and serializable timestamps
 interface InventoryItem extends Omit<AddItemInput, 'createdAt'> { // Omit potential createdAt from schema if it exists
   id: string;
   createdAt?: string; // Store as ISO string for serialization
+  updatedAt?: string; // Store as ISO string for serialization
 }
 
 // Function to fetch inventory items from Firestore
@@ -34,32 +35,27 @@ async function getInventoryItems(): Promise<{ items: InventoryItem[]; error?: st
     const querySnapshot = await getDocs(q); // Use the ordered query
     const items: InventoryItem[] = [];
     querySnapshot.forEach((doc) => {
-      const data = doc.data() as AddItemInput & { createdAt?: Timestamp }; // Expect potential Timestamp
+      const data = doc.data() as AddItemInput & { createdAt?: Timestamp, updatedAt?: Timestamp }; // Expect potential Timestamps
 
-      // Convert Timestamp to ISO string for serialization
-      // Provide a fallback date if createdAt is missing, although it should exist
+      // Convert Timestamps to ISO strings for serialization
       const createdAt = data.createdAt instanceof Timestamp
         ? data.createdAt.toDate().toISOString()
         : new Date(0).toISOString(); // Fallback to epoch if missing - adjust if needed
+      const updatedAt = data.updatedAt instanceof Timestamp
+        ? data.updatedAt.toDate().toISOString()
+        : undefined; // updatedAt might not exist
 
-      // Remove the original createdAt from data if it exists before spreading
-      // Use a temporary variable to avoid modifying the original data object if needed elsewhere
-      const { createdAt: originalTimestamp, ...restData } = data;
+      // Remove the original timestamps from data before spreading
+      const { createdAt: originalTimestamp, updatedAt: originalUpdatedAt, ...restData } = data;
 
       items.push({
         id: doc.id,
         ...restData, // Spread the rest of the data
-        createdAt, // Add the serialized date string
+        createdAt, // Add the serialized createdAt date string
+        updatedAt, // Add the serialized updatedAt date string (or undefined)
       });
     });
     console.log(`Fetched ${items.length} inventory items.`);
-
-    // Sorting is now handled by the Firestore query (orderBy)
-    // items.sort((a, b) => {
-    //    const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-    //    const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-    //    return dateB.getTime() - dateA.getTime(); // Sort descending
-    // });
 
     return { items };
   } catch (error) {
@@ -160,7 +156,7 @@ export default async function InventoryPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {inventoryItems.map((item) => (
              // Use the client component for each card
-             // Pass the item with the serialized date
+             // Pass the item with the serialized dates (createdAt and updatedAt)
              <InventoryItemCard key={item.id} item={item} />
           ))}
         </div>
@@ -190,3 +186,4 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 // Optional: Could consider 'force-static' with revalidation if data changes less frequently
 // export const revalidate = 60; // Revalidate every 60 seconds
+
