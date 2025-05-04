@@ -52,6 +52,8 @@ export default function LoginPage() {
         });
         // Explicitly redirect to the dashboard page
         router.push('/');
+        // Add refresh to ensure state updates and middleware runs correctly
+        router.refresh();
       } else {
         toast({
           variant: "destructive",
@@ -69,7 +71,10 @@ export default function LoginPage() {
         description: "An unexpected error occurred during login.",
       });
     } finally {
-      setIsSubmitting(false);
+      // Only set isSubmitting to false if login failed, otherwise let redirect happen
+      if (!form.formState.isSubmitSuccessful) {
+        setIsSubmitting(false);
+      }
     }
   }
 
