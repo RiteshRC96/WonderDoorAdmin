@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -123,6 +124,8 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
       form.trigger(`items.${index}.price`);
       form.setValue(`items.${index}.image`, selectedItem.imageUrl || '');
       setSelectedItemDetails(prev => ({ ...prev, [index]: selectedItem }));
+       // Clear item-specific error if selection is now valid
+       form.clearErrors(`items.${index}.itemId`);
     } else {
        form.setValue(`items.${index}.name`, '');
        form.setValue(`items.${index}.sku`, '');
@@ -170,16 +173,19 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                      Object.entries(value).forEach(([field, messages]: [string, any]) => {
                          form.setError(`customer.${field as keyof OrderInput['customer']}`, { message: messages?.[0] });
                      });
-                 } else if (key === 'items' && Array.isArray(value)) {
-                     value.forEach((itemErrors, index) => {
-                         if (typeof itemErrors === 'object' && itemErrors !== null) {
-                             const itemErrorKey = Object.keys(itemErrors)[0];
-                              if (itemErrorKey && !firstErrorField) firstErrorField = `items.${index}.${itemErrorKey}`;
-                             Object.entries(itemErrors).forEach(([field, messages]: [string, any]) => {
-                                 form.setError(`items.${index}.${field as keyof OrderInput['items'][0]}`, { message: messages?.[0] });
-                             });
+                 } else if (key === 'items' && typeof value === 'object' && value !== null) { // Handle object for items error
+                      Object.keys(value).forEach(indexKey => { // Iterate through index keys like "0.itemId"
+                         const parts = indexKey.split('.');
+                         if (parts.length === 2) {
+                             const index = parseInt(parts[0], 10);
+                             const field = parts[1] as keyof CreateOrderInput['items'][0];
+                             const messages = value[indexKey];
+                             if (!isNaN(index) && field && Array.isArray(messages)) {
+                                 form.setError(`items.${index}.${field}`, { message: messages[0] });
+                                 if (!firstErrorField) firstErrorField = `items.${index}.${field}`;
+                             }
                          }
-                     });
+                      });
                  } else if (typeof value === 'object' && value !== null && '_errors' in value) {
                       // Handle top-level schema errors
                       form.setError(key as keyof OrderInput, { message: (value as any)._errors?.[0] });
@@ -205,11 +211,20 @@ export function EditOrderForm({ order, inventoryItems }: EditOrderFormProps) {
                  } catch (e) { console.warn("Could not set focus on error field", e); }
              }
 
-            toast({
-                variant: "destructive",
-                title: "Validation Error",
-                description: result.message || "Please check the form fields.",
-            });
+             // Show specific item-not-found error if that was the cause
+             if (result.message && result.message.includes("Inventory item") && result.message.includes("not found")) {
+                 toast({
+                     variant: "destructive",
+                     title: "Item Not Found",
+                     description: result.message,
+                 });
+             } else {
+                 toast({
+                     variant: "destructive",
+                     title: "Validation Error",
+                     description: result.message || "Please check the form fields.",
+                 });
+            }
         } else {
            toast({
              variant: "destructive",
