@@ -3,21 +3,24 @@
 
 import { revalidatePath } from 'next/cache';
 import { db, collection, addDoc, doc, updateDoc, serverTimestamp, Timestamp, getDoc, writeBatch } from '@/lib/firebase/firebase';
-import { OrderSchema, type CreateOrderInput, type Order, type OrderInput, type PaymentInfoSchema, type TrackingInfoSchema, type ShippingInfoSchema } from '@/schemas/order'; // Import Order types/schemas
+import { OrderSchema, type CreateOrderInput, type Order, type OrderInput, PaymentInfoSchema, TrackingInfoSchema, ShippingInfoSchema } from '@/schemas/order'; // Import Order types/schemas
 import type { AddItemInput } from '@/schemas/inventory'; // For fetching item details
+import { AddItemSchema } from '@/schemas/inventory'; // Import AddItemSchema for validation
 
 // --- HELPER FUNCTIONS (MAY NEED UPDATES) ---
 
 // Helper function to fetch current item details (including stock)
 async function getInventoryItem(itemId: string): Promise<(AddItemInput & { id: string }) | null> {
-    if (!db) return null;
+    if (!db) {
+        console.error("getInventoryItem: Firestore database is not initialized.");
+        return null;
+    }
     try {
         const itemDocRef = doc(db, 'inventory', itemId);
         const docSnap = await getDoc(itemDocRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
             // Use AddItemSchema for basic validation/coercion AFTER fetching
-            // Ensure AddItemSchema aligns with inventory structure
             const validatedData = AddItemSchema.safeParse(data);
             if (validatedData.success) {
                 return {
@@ -51,6 +54,7 @@ async function getInventoryItem(itemId: string): Promise<(AddItemInput & { id: s
                 return { id: docSnap.id, ...fallbackData };
             }
         }
+        console.log(`getInventoryItem: Item ${itemId} not found.`);
         return null;
     } catch (error) {
         console.error(`Error fetching inventory item ${itemId}:`, error);
@@ -68,6 +72,7 @@ function calculateOrderTotal(items: { price: number; quantity: number }[]): numb
 // --- CREATE ORDER ACTION ---
 export async function createOrderAction(data: CreateOrderInput): Promise<{ success: boolean; message: string; orderId?: string; errors?: Record<string, any> | null }> {
   if (!db) {
+      console.error("createOrderAction: Firestore database is not initialized.");
       return { success: false, message: "Database configuration error.", errors: null };
   }
 
@@ -80,10 +85,10 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
   const validatedInputData = validationResult.data;
 
   const now = Timestamp.now();
-  const batch = writeBatch(db);
+  const batch = writeBatch(db); // Initialize Firestore batch
   let stockCheckFailed = false;
   let stockErrorMessage = "";
-  let itemsToRestock: { ref: any; quantity: number; name: string; itemId: string }[] = []; // Used for potential rollback/revalidation
+  let itemsToRestock: { ref: any; quantity: number; name: string; itemId: string }[] = []; // For revalidation path
 
   // --- PREPARE FIRESTORE DATA ---
   const ordersCollectionRef = collection(db, 'orders');
@@ -111,25 +116,33 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
       trackingInfo: {
           status: validatedInputData.status === 'Processing' ? 'Shipment Information Received' : 'Pending',
           carrier: validatedInputData.shippingMethod || undefined,
-          trackingNumber: undefined,
+          trackingNumber: undefined, // Tracking number added later
       } as z.infer<typeof TrackingInfoSchema>,
       userId: "admin_placeholder_user_id", // Replace with actual user ID from auth context
+      createdAt: now, // Add createdAt timestamp
+      updatedAt: now, // Add updatedAt timestamp
   };
 
 
   // --- STOCK CHECK & INVENTORY UPDATES ---
   try {
+      console.log("Starting stock check and inventory update preparation...");
       for (const item of firestoreOrderData.items) {
+          console.log(`Processing item: ${item.name} (ID: ${item.doorId})`);
           const inventoryItem = await getInventoryItem(item.doorId);
 
           if (!inventoryItem) {
               stockCheckFailed = true;
               stockErrorMessage = `Inventory item '${item.name}' (ID: ${item.doorId}) not found. Order cannot be placed.`;
+              console.error(stockErrorMessage);
               break;
           }
+          console.log(`Item ${item.doorId} found. Current stock: ${inventoryItem.stock}. Required: ${item.quantity}`);
+
            if (inventoryItem.stock < item.quantity) {
                stockCheckFailed = true;
                stockErrorMessage = `Insufficient stock for item '${item.name}'. Available: ${inventoryItem.stock}, Required: ${item.quantity}.`;
+               console.error(stockErrorMessage);
                break;
            }
 
@@ -142,17 +155,17 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
       }
 
       if (stockCheckFailed) {
-          console.error("Stock check failed:", stockErrorMessage);
+          console.error("Stock check failed. Aborting order creation.");
           return {
               success: false,
               message: stockErrorMessage,
-              errors: { items: [{ message: stockErrorMessage }] }
+              errors: { items: [{ message: stockErrorMessage }] } // Provide error structure for form display
           };
       }
 
       // --- ADD ORDER TO BATCH & COMMIT ---
       batch.set(newOrderRef, firestoreOrderData);
-      console.log("Committing batch operation...");
+      console.log("Adding order to batch and committing...");
       await batch.commit();
       const newOrderId = newOrderRef.id;
       console.log(`Batch committed successfully. New order ID: ${newOrderId}`);
@@ -161,10 +174,10 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
       // --- REVALIDATE ---
       revalidatePath('/orders');
       revalidatePath(`/orders/${newOrderId}`);
-      revalidatePath('/inventory');
-      itemsToRestock.forEach(item => revalidatePath(`/inventory/${item.itemId}`));
+      revalidatePath('/inventory'); // Revalidate inventory list page
+      itemsToRestock.forEach(item => revalidatePath(`/inventory/${item.itemId}`)); // Revalidate individual items
       revalidatePath('/logistics');
-      revalidatePath('/');
+      revalidatePath('/'); // Revalidate dashboard
 
       return {
         success: true,
@@ -178,6 +191,8 @@ export async function createOrderAction(data: CreateOrderInput): Promise<{ succe
        if (error instanceof Error) {
            errorMessage = `Failed to create order: ${error.message}`;
        }
+       // No rollback implemented, stock updates might have partially succeeded if error occurred during commit.
+       // Consider implementing more robust transaction/rollback logic if needed.
        return { success: false, message: errorMessage, errors: null };
     }
 }
@@ -323,7 +338,6 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
     const batch = writeBatch(db);
     let itemsToRestock: { ref: any; quantity: number; name: string; itemId: string }[] = [];
     let restockSkippedCount = 0;
-    let shipmentTrackingNumber: string | undefined;
 
     try {
         console.log(`Attempting to cancel order ${orderId}`);
@@ -337,14 +351,14 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
 
         // --- Cancellation Check ---
         const currentStatus = orderData.status;
-        const cancellableStatuses = ['Pending Payment', 'Processing']; // Define which statuses allow cancellation
+        // Define statuses where cancellation is still allowed (might need adjustment)
+        const cancellableStatuses = ['Pending Payment', 'Processing'];
         const nonCancellableStatuses = ['Shipped', 'Delivered', 'Cancelled', 'Refunded'];
 
         if (nonCancellableStatuses.includes(currentStatus)) {
             console.log(`Order ${orderId} is already ${currentStatus} and cannot be cancelled.`);
             return { success: false, message: `Order is already ${currentStatus} and cannot be cancelled.` };
         }
-        // Optionally warn or prevent cancellation for other statuses if needed
 
         // --- Prepare Order Update ---
         batch.update(orderDocRef, {
@@ -375,8 +389,6 @@ export async function cancelOrderAction(orderId: string): Promise<{ success: boo
           if (restockSkippedCount > 0) {
               console.warn(`${restockSkippedCount} items could not be restocked because they were not found.`);
           }
-
-         // Note: Shipment collection update logic removed as trackingInfo is within Order doc
 
         // --- Commit Batch ---
         console.log(`Committing cancellation batch for order ${orderId}`);
