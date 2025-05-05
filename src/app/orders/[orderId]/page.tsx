@@ -96,12 +96,14 @@ const getStatusVariant = (status: string): "default" | "secondary" | "outline" |
        return 'secondary';
      case 'delivered':
      case 'paid': // Assuming 'Paid' aligns with completed states
+     case 'completed': // Added Completed
        return 'outline';
      case 'cancelled':
      case 'failed':
      case 'refunded':
        return 'destructive';
      case 'pending payment':
+     case 'pending': // Added Pending
      case 'cod': // If COD is treated as pending/secondary
        return 'secondary';
      default:
@@ -170,11 +172,11 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
               <Printer className="mr-2 h-4 w-4" />
               Print Invoice (soon)
             </Button>
-            {/* Link to edit page (assuming it needs update for new structure) */}
-           <Button size="sm" asChild disabled>
+            {/* Link to edit page */}
+           <Button size="sm" asChild>
              <Link href={`/orders/${order.id}/edit`}>
                 <Edit className="mr-2 h-4 w-4" />
-                Edit Order (soon)
+                Edit Order
              </Link>
            </Button>
          </div>
@@ -217,19 +219,25 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
              <div className="space-y-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2"><Hash className="h-5 w-5 text-muted-foreground" /> Order Summary</h3>
                  {/* Payment Info */}
-                 <div className="text-sm"><span className="text-muted-foreground">Payment Method:</span> <Badge variant={getStatusVariant(order.paymentInfo.paymentMethod)}>{order.paymentInfo.paymentMethod}</Badge></div>
+                 <div className="text-sm flex items-center gap-2">
+                   <span className="text-muted-foreground">Payment Method:</span>
+                   <Badge variant={getStatusVariant(order.paymentInfo.paymentMethod)}>{order.paymentInfo.paymentMethod}</Badge>
+                 </div>
                  {/* Tracking Info */}
                  {order.trackingInfo?.trackingNumber ? (
                     <>
                         <p className="text-sm"><span className="text-muted-foreground">Carrier:</span> {order.trackingInfo.carrier || 'N/A'}</p>
-                        <p className="text-sm"><span className="text-muted-foreground">Tracking #:</span>
+                        {/* Change parent from <p> to <div> for valid HTML nesting */}
+                        <div className="text-sm flex items-center gap-2">
+                          <span className="text-muted-foreground">Tracking #:</span>
                            {/* Add link to logistics page if applicable, might need Shipment ID */}
                             <span className="ml-1">{order.trackingInfo.trackingNumber}</span>
-                            {/* <Link href={`/logistics/${order.trackingInfo.trackingNumber}`} className="text-primary hover:underline flex items-center gap-1">
-                                <Truck className="h-4 w-4"/>{order.trackingInfo.trackingNumber}
-                            </Link> */}
-                        </p>
-                         <p className="text-sm"><span className="text-muted-foreground">Shipment Status:</span> <Badge variant={getStatusVariant(order.trackingInfo.status || 'N/A')}>{order.trackingInfo.status || 'N/A'}</Badge></p>
+                        </div>
+                         {/* Change parent from <p> to <div> for valid HTML nesting */}
+                         <div className="text-sm flex items-center gap-2">
+                           <span className="text-muted-foreground">Shipment Status:</span>
+                           <Badge variant={getStatusVariant(order.trackingInfo.status || 'N/A')}>{order.trackingInfo.status || 'N/A'}</Badge>
+                         </div>
                     </>
                  ) : (
                      <p className="text-sm italic text-muted-foreground">No shipment information available yet.</p>
@@ -247,13 +255,8 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
           </CardContent>
        </Card>
 
-        {/* Order Status Updater Card - Needs update to handle new status logic */}
-        {/* <OrderStatusUpdater orderId={order.id} currentStatus={order.status} /> */}
-        <Card>
-             <CardHeader><CardTitle>Status Management (Placeholder)</CardTitle></CardHeader>
-             <CardContent><p className="text-muted-foreground italic">Order status update component needs refinement for the new data structure.</p></CardContent>
-        </Card>
-
+        {/* Order Status Updater Card */}
+        <OrderStatusUpdater orderId={order.id} currentStatus={order.status} />
 
         <Card className="shadow-md">
          <CardHeader>
@@ -322,3 +325,4 @@ export async function generateMetadata({ params }: { params: { orderId: string }
 
 // Ensure dynamic rendering because data is fetched on each request
 export const dynamic = 'force-dynamic';
+
