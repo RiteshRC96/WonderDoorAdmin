@@ -15,13 +15,15 @@ try {
 const db = admin.firestore();
 
 // --- Function to DECREASE stock when an order is CREATED ---
+// This function will now be triggered whenever *any* new order document is created
+// in the 'orders' collection, including orders placed from your E-commerce app.
 export const decreaseInventoryOnOrderCreate = functions.firestore
   .document("orders/{orderId}")
   .onCreate(async (snap, context) => {
     const orderData = snap.data();
     const orderId = context.params.orderId;
 
-    console.log(`New order ${orderId} created. Decreasing inventory...`);
+    console.log(`New order ${orderId} detected. Decreasing inventory...`);
 
     if (!orderData || !orderData.items || orderData.items.length === 0) {
       console.log(`Order ${orderId} has no items. No stock decrease needed.`);
@@ -37,7 +39,7 @@ export const decreaseInventoryOnOrderCreate = functions.firestore
         const inventoryItemId = item.doorId;
         const orderedQuantity = item.quantity;
 
-        if (!inventoryItemId || orderedQuantity <= 0) {
+        if (!inventoryItemId || typeof orderedQuantity !== 'number' || orderedQuantity <= 0) {
           console.warn(`Skipping item stock decrease in order ${orderId}: Invalid doorId (${inventoryItemId}) or quantity (${orderedQuantity}).`);
           continue;
         }
@@ -48,9 +50,9 @@ export const decreaseInventoryOnOrderCreate = functions.firestore
             const inventoryDoc = await transaction.get(inventoryItemRef);
 
             if (!inventoryDoc.exists) {
-              console.error(`Inventory item ${inventoryItemId} for order ${orderId} not found. Cannot decrease stock.`);
+              console.error(`Inventory item ${inventoryItemId} for order ${orderId} not found. Cannot decrease stock. Potential data inconsistency.`);
               // Decide how to handle: Continue? Throw error to fail transaction?
-              // Continuing for now, but this indicates a potential data inconsistency.
+              // Continuing for now, but this should be monitored.
               continue;
             }
 
@@ -65,7 +67,7 @@ export const decreaseInventoryOnOrderCreate = functions.firestore
             const newStock = currentStock - orderedQuantity;
 
             if (newStock < 0) {
-                // This should ideally be prevented by checks in the ordering system
+                // This should ideally be prevented by checks in the ordering system (Ecomm app)
                 console.warn(`Order ${orderId} item ${inventoryItemId} quantity (${orderedQuantity}) exceeds current stock (${currentStock}). Setting stock to 0.`);
                  updatePromises.push(
                    transaction.update(inventoryItemRef, {
@@ -75,7 +77,7 @@ export const decreaseInventoryOnOrderCreate = functions.firestore
                    })
                  );
             } else {
-                console.log(`Decreasing stock for item ${inventoryItemId}: ${currentStock} -> ${newStock}`);
+                console.log(`Decreasing stock for inventory item ${inventoryItemId}: ${currentStock} -> ${newStock}`);
                 updatePromises.push(
                   transaction.update(inventoryItemRef, {
                     stock: newStock,
@@ -84,7 +86,7 @@ export const decreaseInventoryOnOrderCreate = functions.firestore
                 );
             }
         } catch (error) {
-            console.error(`Error processing item ${inventoryItemId} in transaction for order ${orderId}:`, error);
+            console.error(`Error processing inventory item ${inventoryItemId} in transaction for order ${orderId}:`, error);
             // Throw the error to abort the transaction if any single item fails critically
             throw new Error(`Failed to process stock for item ${inventoryItemId}`);
         }
@@ -102,6 +104,7 @@ export const decreaseInventoryOnOrderCreate = functions.firestore
 
 
 // --- Existing Function to RESTOCK inventory when an order is CANCELLED ---
+// Ensure this function also uses 'doorId' correctly.
 export const restockInventoryOnOrderCancel = functions.firestore
   .document("orders/{orderId}")
   .onUpdate(async (change, context) => {
@@ -126,8 +129,8 @@ export const restockInventoryOnOrderCancel = functions.firestore
           const inventoryItemId = item.doorId; // Use doorId
           const orderedQuantity = item.quantity;
 
-          if (!inventoryItemId || orderedQuantity <= 0) {
-            console.warn(`Skipping item restock in cancelled order ${orderId}: Invalid doorId or quantity.`);
+          if (!inventoryItemId || typeof orderedQuantity !== 'number' || orderedQuantity <= 0) {
+            console.warn(`Skipping item restock in cancelled order ${orderId}: Invalid doorId (${inventoryItemId}) or quantity (${orderedQuantity}).`);
             continue;
           }
 
@@ -146,13 +149,13 @@ export const restockInventoryOnOrderCancel = functions.firestore
               const currentStock = inventoryData?.stock;
 
               if (typeof currentStock !== 'number') {
-                 console.error(`Inventory item ${inventoryItemId} has invalid stock data. Cannot restock.`);
+                 console.error(`Inventory item ${inventoryItemId} has invalid stock data (${currentStock}). Cannot restock.`);
                  continue; // Skip this item
               }
 
               const newStock = currentStock + orderedQuantity; // Add back the quantity
 
-              console.log(`Restocking item ${inventoryItemId}: ${currentStock} -> ${newStock}`);
+              console.log(`Restocking inventory item ${inventoryItemId}: ${currentStock} -> ${newStock}`);
 
               updatePromises.push(
                 transaction.update(inventoryItemRef, {
