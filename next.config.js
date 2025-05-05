@@ -59,9 +59,16 @@ const nextConfig = {
          hostname: 'tiimg.tistatic.com', // Add tiimg.tistatic.com hostname
          port: '',
          pathname: '/**',
-       }
+       },
+       {
+          protocol: 'https',
+          hostname: 'encrypted-tbn0.gstatic.com', // Add Google Images hostname
+          port: '',
+          pathname: '/**',
+        }
     ],
   },
 };
 
 module.exports = nextConfig; // Use module.exports for commonjs
+
